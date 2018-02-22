@@ -1,5 +1,8 @@
 // map.h
 
+#ifndef MAP_H_INCLUDED
+#define MAP_H_INCLUDED
+
 #warning this shold be removed later
 typedef struct _Map {
     struct Map *r0;
@@ -27,3 +30,5 @@ void map_remove(Map *m, const char *key);
 size_t map_len(Map *m);
 
 void map_free(Map *m);
+
+#endif // MAP_H_INCLUDED
