@@ -53,7 +53,7 @@ static void write32(Buffer *b, uint32_t x) {
 }
 
 Buffer *to_utf16(char *p, int len) {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     char *end = p + len;
     while (p != end) {
         uint32_t rune;
@@ -69,7 +69,7 @@ Buffer *to_utf16(char *p, int len) {
 }
 
 Buffer *to_utf32(char *p, int len) {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     char *end = p + len;
     while (p != end) {
         uint32_t rune;

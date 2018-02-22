@@ -31,20 +31,20 @@ static void assert_int2(int line, long a, long b) {
 }
 
 static void test_buf() {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_new();
     buf_write(b, 'a');
     buf_write(b, 'b');
     buf_write(b, '\0');
     assert_string("ab", buf_body(b));
 
-    Buffer *b2 = make_buffer();
+    Buffer *b2 = buf_new();
     buf_write(b2, '.');
     buf_printf(b2, "%s", "0123456789");
     assert_string(".0123456789", buf_body(b2));
 }
 
 static void test_list() {
-    Vector *list = make_vector();
+    Vector *list = vec_new();
     assert_int(0, vec_len(list));
     vec_push(list, (void *)1);
     assert_int(1, vec_len(list));
@@ -63,7 +63,7 @@ static void test_list() {
     assert_int(2, (long)vec_pop(rev));
     assert_int(0, vec_len(rev));
 
-    Vector *list3 = make_vector();
+    Vector *list3 = vec_new();
     vec_push(list3, (void *)1);
     assert_int(1, (long)vec_head(list3));
     assert_int(1, (long)vec_tail(list3));
@@ -71,7 +71,7 @@ static void test_list() {
     assert_int(1, (long)vec_head(list3));
     assert_int(2, (long)vec_tail(list3));
 
-    Vector *list4 = make_vector();
+    Vector *list4 = vec_new();
     vec_push(list4, (void *)1);
     vec_push(list4, (void *)2);
     assert_int(1, (long)vec_get(list4, 0));
@@ -79,7 +79,7 @@ static void test_list() {
 }
 
 static void test_map() {
-    Map *m = make_map();
+    Map *m = map_new();
     assert_null(map_get(m, "abc"));
 
     // Insert 10000 values
@@ -106,12 +106,12 @@ static void test_map() {
 }
 
 static void test_map_stack() {
-    Map *m1 = make_map();
+    Map *m1 = map_new();
     map_put(m1, "x", (void *)1);
     map_put(m1, "y", (void *)2);
     assert_int(1, (int)(intptr_t)map_get(m1, "x"));
 
-    Map *m2 = make_map_parent(m1);
+    Map *m2 = map_new_parent(m1);
     assert_int(1, (int)(intptr_t)map_get(m2, "x"));
     map_put(m2, "x", (void *)3);
     assert_int(3, (int)(intptr_t)map_get(m2, "x"));
@@ -119,7 +119,7 @@ static void test_map_stack() {
 }
 
 static void test_dict() {
-    Dict *dict = make_dict();
+    Dict *dict = dict_new();
     assert_null(dict_get(dict, "abc"));
     dict_put(dict, "abc", (void *)50);
     dict_put(dict, "xyz", (void *)70);
@@ -158,7 +158,7 @@ static void test_path() {
 }
 
 static void test_file() {
-    stream_push(make_file_string("abc"));
+    stream_push(file_init_string(file_alloc(), "abc"));
     assert_int('a', readc());
     assert_int('b', readc());
     unreadc('b');
@@ -172,7 +172,7 @@ static void test_file() {
     assert_true(readc() < 0);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, const char **argv) {
     test_buf();
     test_list();
     test_map();

@@ -16,7 +16,7 @@ static bool cpponly;
 static bool dumpasm;
 static bool dontlink;
 static Buffer *cppdefs;
-static Vector *tmpfiles = &EMPTY_VECTOR;
+static Vector *tmpfiles = EMPTY_VECTOR;
 
 static void usage(int exitcode) {
     fprintf(exitcode ? stderr : stdout,
@@ -103,8 +103,8 @@ static void parse_m_arg(char *s) {
         error("Only 64 is allowed for -m, but got %s", s);
 }
 
-static void parseopt(int argc, char **argv) {
-    cppdefs = make_buffer();
+static void parseopt(int argc, const char **argv) {
+    cppdefs = buf_init(buf_alloc());
     for (;;) {
         int opt = getopt(argc, argv, "I:ED:O:SU:W:acd:f:gm:o:hw");
         if (opt == -1)

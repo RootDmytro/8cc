@@ -33,7 +33,7 @@ static char *do_ty2s(Dict *dict, Type *ty) {
             return format("(%s)", kind);
         dict_put(dict, format("%p", ty), (void *)1);
         if (ty->fields) {
-            Buffer *b = make_buffer();
+            Buffer *b = buf_init(buf_alloc());
             buf_printf(b, "(%s", kind);
             Vector *keys = dict_keys(ty->fields);
             for (int i = 0; i < vec_len(keys); i++) {
@@ -46,7 +46,7 @@ static char *do_ty2s(Dict *dict, Type *ty) {
         }
     }
     case KIND_FUNC: {
-        Buffer *b = make_buffer();
+        Buffer *b = buf_init(buf_alloc());
         buf_printf(b, "(");
         if (ty->params) {
             for (int i = 0; i < vec_len(ty->params); i++) {
@@ -65,7 +65,7 @@ static char *do_ty2s(Dict *dict, Type *ty) {
 }
 
 char *ty2s(Type *ty) {
-    return do_ty2s(make_dict(), ty);
+    return do_ty2s(dict_new(), ty);
 }
 
 static void uop_to_string(Buffer *b, char *op, Node *node) {
@@ -263,7 +263,7 @@ static void do_node2s(Buffer *b, Node *node) {
 }
 
 char *node2s(Node *node) {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     do_node2s(b, node);
     return buf_body(b);
 }
@@ -296,7 +296,7 @@ char *tok2s(Token *tok) {
     case TCHAR:
         return format("%s'%s'",
                       encoding_prefix(tok->enc),
-                      quote_char(tok->c));
+                      escape_char(tok->c));
     case TNUMBER:
         return tok->sval;
     case TSTRING:

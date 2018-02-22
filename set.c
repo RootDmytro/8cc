@@ -15,34 +15,59 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "8cc.h"
+#include "set.h"
 
-Set *set_add(Set *s, char *v) {
-    Set *r = malloc(sizeof(Set));
-    r->next = s;
-    r->v = v;
+
+typedef struct Set {
+    char *value;
+    Set *next;
+} Set;
+
+
+Set *set_alloc(void) {
+    Set *r = calloc(1, sizeof(Set));
+    r->next = NULL;
     return r;
 }
 
-bool set_has(Set *s, char *v) {
+Set *set_init(Set *s, Set *next, char *value) {
+    s->next = next;
+    s->value = value;
+    return s;
+}
+
+Set *set_add(Set *s, char *value) {
+    Set *r = set_alloc();
+    r = set_init(r, s, value);
+    return r;
+}
+
+bool set_has(Set *s, char *value) {
     for (; s; s = s->next)
-        if (!strcmp(s->v, v))
-            return true;
-    return false;
+        if (strcmp(s->value, value) == 0)
+            return 1;
+    return 0;
 }
 
 Set *set_union(Set *a, Set *b) {
     Set *r = b;
     for (; a; a = a->next)
-        if (!set_has(b, a->v))
-            r = set_add(r, a->v);
+        if (!set_has(b, a->value))
+            r = set_add(r, a->value);
     return r;
 }
 
 Set *set_intersection(Set *a, Set *b) {
     Set *r = NULL;
     for (; a; a = a->next)
-        if (set_has(b, a->v))
-            r = set_add(r, a->v);
+        if (set_has(b, a->value))
+            r = set_add(r, a->value);
     return r;
+}
+
+void set_free(Set *s) {
+    for (Set *next; s; s = next) {
+		next = s->next;
+		free(s);
+    }
 }

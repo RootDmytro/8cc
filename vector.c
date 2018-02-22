@@ -5,16 +5,26 @@
  */
 
 #include <stdlib.h>
+#include <assert.h>
 #include <string.h>
-#include "8cc.h"
+#include "vector.h"
 
 #define MIN_SIZE 8
+
+
+typedef struct Vector {
+    void **body;
+    int len;
+    int nalloc;
+} Vector;
+
+///////////////////////////////////
 
 static int max(int a, int b) {
     return a > b ? a : b;
 }
 
-static int roundup(int n) {
+static int round_to_pow2(int n) {
     if (n == 0)
         return 0;
     int r = 1;
@@ -23,50 +33,76 @@ static int roundup(int n) {
     return r;
 }
 
-static Vector *do_make_vector(int size) {
-    Vector *r = malloc(sizeof(Vector));
-    size = roundup(size);
-    if (size > 0)
-        r->body = malloc(sizeof(void *) * size);
-    r->len = 0;
-    r->nalloc = size;
+///////////////////////////////////
+
+Vector *vec_alloc(void) {
+	Vector *r = calloc(1, sizeof(Vector));
+	r->body = NULL;
     return r;
 }
 
-Vector *make_vector() {
-    return do_make_vector(0);
+Vector *vec_init(Vector *vec) {
+    vec->body = NULL;
+    vec->len = 0;
+    vec->nalloc = 0;
+    return vec;
 }
 
-static void extend(Vector *vec, int delta) {
-    if (vec->len + delta <= vec->nalloc)
+Vector *vec_init_size(Vector *vec, int size) {
+    size = round_to_pow2(size);
+
+    if (size > 0) {
+        vec->body = calloc(size, sizeof(void *));
+    } else {
+    	vec->body = NULL;
+    }
+
+    vec->len = 0;
+    vec->nalloc = size;
+    return vec;
+}
+
+static void vec_extend(Vector *vec, int delta) {
+    if (vec->len + delta <= vec->nalloc) {
         return;
-    int nelem = max(roundup(vec->len + delta), MIN_SIZE);
-    void *newbody = malloc(sizeof(void *) * nelem);
-    memcpy(newbody, vec->body, sizeof(void *) * vec->len);
+	}
+
+    int nelem = max(round_to_pow2(vec->len + delta), MIN_SIZE);
+    void *newbody = calloc(nelem, sizeof(void *));
+
+    if (vec->body) {
+		memcpy(newbody, vec->body, sizeof(void *) * vec->len);
+    }
+
+    free(vec->body);
     vec->body = newbody;
     vec->nalloc = nelem;
 }
 
-Vector *make_vector1(void *e) {
-    Vector *r = do_make_vector(0);
-    vec_push(r, e);
-    return r;
+Vector *vec_new(void) {
+    return vec_init(vec_alloc());
+}
+
+Vector *vec_new1(void *elem) {
+    Vector *vec = vec_init_size(vec_alloc(), 1);
+    vec->body[vec->len++] = elem;
+    return vec;
 }
 
 Vector *vec_copy(Vector *src) {
-    Vector *r = do_make_vector(src->len);
-    memcpy(r->body, src->body, sizeof(void *) * src->len);
-    r->len = src->len;
-    return r;
+    Vector *vec = vec_init_size(vec_alloc(), src->len);
+    memcpy(vec->body, src->body, sizeof(void *) * src->len);
+    vec->len = src->len;
+    return vec;
 }
 
 void vec_push(Vector *vec, void *elem) {
-    extend(vec, 1);
+    vec_extend(vec, 1);
     vec->body[vec->len++] = elem;
 }
 
 void vec_append(Vector *a, Vector *b) {
-    extend(a, b->len);
+    vec_extend(a, b->len);
     memcpy(a->body + a->len, b->body, sizeof(void *) * b->len);
     a->len += b->len;
 }
@@ -97,7 +133,7 @@ void *vec_tail(Vector *vec) {
 }
 
 Vector *vec_reverse(Vector *vec) {
-    Vector *r = do_make_vector(vec->len);
+    Vector *r = vec_init_size(vec_alloc(), vec->len);
     for (int i = 0; i < vec->len; i++)
         r->body[i] = vec->body[vec->len - i - 1];
     r->len = vec->len;
@@ -110,4 +146,15 @@ void *vec_body(Vector *vec) {
 
 int vec_len(Vector *vec) {
     return vec->len;
+}
+
+void vec_each(Vector *vec, fptr_t *fptr) {
+    for (int i = 0; i < vec->len; i++) {
+		fptr(vec->body[i]);
+    }
+}
+
+void vec_free(Vector *vec) {
+    free(vec->body);
+    free(vec);
 }

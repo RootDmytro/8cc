@@ -1,13 +1,32 @@
 // Copyright 2012 Rui Ueyama. Released under the MIT license.
 
 #include <stdlib.h>
-#include "8cc.h"
+#include "dict.h"
+#include "map.h"
+#include "vector.h"
 
-Dict *make_dict() {
-    Dict *r = malloc(sizeof(Dict));
-    r->map = make_map();
-    r->key = make_vector();
+
+typedef struct Dict {
+    Map *map;
+    Vector *key;
+} Dict;
+
+
+Dict *dict_alloc(void) {
+	Dict *r = calloc(1, sizeof(Dict));
+	r->map = NULL;
+	r->key = NULL;
     return r;
+}
+
+Dict *dict_init(Dict *dict) {
+    dict->map = map_new();
+    dict->key = vec_new();
+    return dict;
+}
+
+Dict *dict_new(void) {
+	return dict_init(dict_alloc());
 }
 
 void *dict_get(Dict *dict, char *key) {
@@ -21,4 +40,10 @@ void dict_put(Dict *dict, char *key, void *val) {
 
 Vector *dict_keys(Dict *dict) {
     return dict->key;
+}
+
+void dict_free(Dict *dict) {
+	map_free(dict->map);
+	vec_free(dict->key);
+    free(dict);
 }

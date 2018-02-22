@@ -27,9 +27,9 @@ SourceLoc *source_loc;
 // Objects representing various scopes. Did you know C has so many different
 // scopes? You can use the same name for global variable, local variable,
 // struct/union/enum tag, and goto label!
-static Map *globalenv = &EMPTY_MAP;
+static Map *globalenv = EMPTY_MAP;
 static Map *localenv;
-static Map *tags = &EMPTY_MAP;
+static Map *tags = EMPTY_MAP;
 static Map *labels;
 
 static Vector *toplevels;
@@ -116,7 +116,7 @@ enum {
 static void mark_location() {
     Token *tok = peek();
     source_loc = malloc(sizeof(SourceLoc));
-    source_loc->file = tok->file->name;
+    source_loc->file = file_name(tok->file);
     source_loc->line = tok->line;
 }
 
@@ -792,7 +792,7 @@ static Node *read_alignof_operand() {
  */
 
 static Vector *read_func_args(Vector *params) {
-    Vector *args = make_vector();
+    Vector *args = vec_new();
     int i = 0;
     for (;;) {
         if (next_token(')')) break;
@@ -844,7 +844,7 @@ static bool type_compatible(Type *a, Type *b) {
 }
 
 static Vector *read_generic_list(Node **defaultexpr) {
-    Vector *r = make_vector();
+    Vector *r = vec_new();
     for (;;) {
         if (next_token(')'))
             return r;
@@ -910,7 +910,7 @@ static Node *read_var_or_func(char *name) {
         Token *tok = peek();
         if (!is_keyword(tok, '('))
             errort(tok, "undefined variable: %s", name);
-        Type *ty = make_func_type(type_int, make_vector(), true, false);
+        Type *ty = make_func_type(type_int, vec_new(), true, false);
         warnt(tok, "assume returning int: %s()", name);
         return ast_funcdesg(ty, name);
     }
@@ -1367,7 +1367,7 @@ static int read_bitsize(char *name, Type *ty) {
 }
 
 static Vector *read_rectype_fields_sub() {
-    Vector *r = make_vector();
+    Vector *r = vec_new();
     for (;;) {
         if (next_token(KSTATIC_ASSERT)) {
             read_static_assert();
@@ -1425,7 +1425,7 @@ static void finish_bitfield(int *off, int *bitoff) {
 
 static Dict *update_struct_offset(int *rsize, int *align, Vector *fields) {
     int off = 0, bitoff = 0;
-    Dict *r = make_dict();
+    Dict *r = dict_new();
     for (int i = 0; i < vec_len(fields); i++) {
         void **pair = vec_get(fields, i);
         char *name = pair[0];
@@ -1482,7 +1482,7 @@ static Dict *update_struct_offset(int *rsize, int *align, Vector *fields) {
 
 static Dict *update_union_offset(int *rsize, int *align, Vector *fields) {
     int maxsize = 0;
-    Dict *r = make_dict();
+    Dict *r = dict_new();
     for (int i = 0; i < vec_len(fields); i++) {
         void **pair = vec_get(fields, i);
         char *name = pair[0];
@@ -1786,7 +1786,7 @@ static void read_initializer_list(Vector *inits, Type *ty, int off, bool designa
 }
 
 static Vector *read_decl_init(Type *ty) {
-    Vector *r = make_vector();
+    Vector *r = vec_new();
     if (is_keyword(peek(), '{') || is_string(ty)) {
         read_initializer_list(r, ty, 0, false);
     } else {
@@ -1883,14 +1883,14 @@ static Type *read_func_param_list(Vector *paramvars, Type *rettype) {
     // the function has no parameters.
     Token *tok = get();
     if (is_keyword(tok, KVOID) && next_token(')'))
-        return make_func_type(rettype, make_vector(), false, false);
+        return make_func_type(rettype, vec_new(), false, false);
 
     // C11 6.7.6.3p14: K&R-style un-prototyped declaration or
     // function definition having no parameters.
     // We return a type representing K&R-style declaration here.
     // If this is actually part of a declartion, the type will be fixed later.
     if (is_keyword(tok, ')'))
-        return make_func_type(rettype, make_vector(), true, true);
+        return make_func_type(rettype, vec_new(), true, true);
     unget_token(tok);
 
     Token *tok2 = peek();
@@ -1898,14 +1898,14 @@ static Type *read_func_param_list(Vector *paramvars, Type *rettype) {
         errort(tok2, "at least one parameter is required before \"...\"");
     if (is_type(peek())) {
         bool ellipsis;
-        Vector *paramtypes = make_vector();
+        Vector *paramtypes = vec_new();
         read_declarator_params(paramtypes, paramvars, &ellipsis);
         return make_func_type(rettype, paramtypes, ellipsis, false);
     }
     if (!paramvars)
         errort(tok, "invalid function definition");
     read_declarator_params_oldstyle(paramvars);
-    Vector *paramtypes = make_vector();
+    Vector *paramtypes = vec_new();
     for (int i = 0; i < vec_len(paramvars); i++)
         vec_push(paramtypes, type_int);
     return make_func_type(rettype, paramtypes, false, true);
@@ -2204,7 +2204,7 @@ static void read_decl(Vector *block, bool isglobal) {
 static Vector *read_oldstyle_param_args() {
     Map *orig = localenv;
     localenv = NULL;
-    Vector *r = make_vector();
+    Vector *r = vec_new();
     for (;;) {
         if (is_keyword(peek(), '{'))
             break;
@@ -2241,7 +2241,7 @@ static void read_oldstyle_param_type(Vector *params) {
 }
 
 static Vector *param_types(Vector *params) {
-    Vector *r = make_vector();
+    Vector *r = vec_new();
     for (int i = 0; i < vec_len(params); i++) {
         Node *param = vec_get(params, i);
         vec_push(r, param->ty);
@@ -2254,8 +2254,8 @@ static Vector *param_types(Vector *params) {
  */
 
 static Node *read_func_body(Type *functype, char *fname, Vector *params) {
-    localenv = make_map_parent(localenv);
-    localvars = make_vector();
+    localenv = map_new_parent(localenv);
+    localvars = vec_new();
     current_func_type = functype;
     Node *funcname = ast_string(ENC_NONE, fname, strlen(fname) + 1);
     map_put(localenv, "__func__", funcname);
@@ -2287,7 +2287,7 @@ static void skip_parentheses(Vector *buf) {
 // definition. (Usually '{' comes after a closing parenthesis.
 // A type keyword is allowed for K&R-style function definitions.)
 static bool is_funcdef() {
-    Vector *buf = make_vector();
+    Vector *buf = vec_new();
     bool r = false;
     for (;;) {
         Token *tok = get();
@@ -2333,11 +2333,11 @@ static void backfill_labels() {
 static Node *read_funcdef() {
     int sclass = 0;
     Type *basetype = read_decl_spec_opt(&sclass);
-    localenv = make_map_parent(globalenv);
-    gotos = make_vector();
-    labels = make_map();
+    localenv = map_new_parent(globalenv);
+    gotos = vec_new();
+    labels = map_new();
     char *name;
-    Vector *params = make_vector();
+    Vector *params = vec_new();
     Type *functype = read_declarator(&name, basetype, params, DECL_BODY);
     if (functype->oldstyle) {
         if (vec_len(params) == 0)
@@ -2381,7 +2381,7 @@ static Node *read_if_stmt() {
 static Node *read_opt_decl_or_stmt() {
     if (next_token(';'))
         return NULL;
-    Vector *list = make_vector();
+    Vector *list = vec_new();
     read_decl_or_stmt(list);
     return ast_compound_stmt(list);
 }
@@ -2402,7 +2402,7 @@ static Node *read_for_stmt() {
     char *mid = make_label();
     char *end = make_label();
     Map *orig = localenv;
-    localenv = make_map_parent(localenv);
+    localenv = map_new_parent(localenv);
     Node *init = read_opt_decl_or_stmt();
     Node *cond = read_expr_opt();
     if (cond && is_flotype(cond->ty))
@@ -2415,7 +2415,7 @@ static Node *read_for_stmt() {
     RESTORE_JUMP_LABELS();
     localenv = orig;
 
-    Vector *v = make_vector();
+    Vector *v = vec_new();
     if (init)
         vec_push(v, init);
     vec_push(v, ast_dest(beg));
@@ -2446,7 +2446,7 @@ static Node *read_while_stmt() {
     Node *body = read_stmt();
     RESTORE_JUMP_LABELS();
 
-    Vector *v = make_vector();
+    Vector *v = vec_new();
     vec_push(v, ast_dest(beg));
     vec_push(v, ast_if(cond, body, ast_jump(end)));
     vec_push(v, ast_jump(beg));
@@ -2472,7 +2472,7 @@ static Node *read_do_stmt() {
     expect(')');
     expect(';');
 
-    Vector *v = make_vector();
+    Vector *v = vec_new();
     vec_push(v, ast_dest(beg));
     if (body)
         vec_push(v, body);
@@ -2516,7 +2516,7 @@ static void check_case_duplicates(Vector *cases) {
     Vector *ocases = cases;                     \
     char *odefaultcase = defaultcase;           \
     char *obreak = lbreak;                      \
-    cases = make_vector();                      \
+    cases = vec_new();                          \
     defaultcase = NULL;                         \
     lbreak = brk
 
@@ -2534,7 +2534,7 @@ static Node *read_switch_stmt() {
     char *end = make_label();
     SET_SWITCH_CONTEXT(end);
     Node *body = read_stmt();
-    Vector *v = make_vector();
+    Vector *v = vec_new();
     Node *var = ast_lvar(expr->ty, make_tempname());
     vec_push(v, ast_binop(expr->ty, '=', var, expr));
     for (int i = 0; i < vec_len(cases); i++)
@@ -2549,7 +2549,7 @@ static Node *read_switch_stmt() {
 
 static Node *read_label_tail(Node *label) {
     Node *stmt = read_stmt();
-    Vector *v = make_vector();
+    Vector *v = vec_new();
     vec_push(v, label);
     if (stmt)
         vec_push(v, stmt);
@@ -2668,8 +2668,8 @@ static Node *read_stmt() {
 
 static Node *read_compound_stmt() {
     Map *orig = localenv;
-    localenv = make_map_parent(localenv);
-    Vector *list = make_vector();
+    localenv = map_new_parent(localenv);
+    Vector *list = vec_new();
     for (;;) {
         if (next_token('}'))
             break;
@@ -2700,7 +2700,7 @@ static void read_decl_or_stmt(Vector *list) {
  */
 
 Vector *read_toplevels() {
-    toplevels = make_vector();
+    toplevels = vec_new();
     for (;;) {
         if (peek()->kind == TEOF)
             return toplevels;
@@ -2718,7 +2718,7 @@ Vector *read_toplevels() {
 // C11 5.1.1.2p6 Adjacent string literal tokens are concatenated.
 static void concatenate_string(Token *tok) {
     int enc = tok->enc;
-    Buffer *b = make_buffer();
+    Buffer *b = buf_new();
     buf_append(b, tok->sval, tok->slen - 1);
     while (peek()->kind == TSTRING) {
         Token *tok2 = read_token();
@@ -2757,8 +2757,8 @@ static void define_builtin(char *name, Type *rettype, Vector *paramtypes) {
 }
 
 void parse_init() {
-    Vector *voidptr = make_vector1(make_ptr_type(type_void));
-    Vector *two_voidptrs = make_vector();
+    Vector *voidptr = vec_new1(make_ptr_type(type_void));
+    Vector *two_voidptrs = vec_new();
     vec_push(two_voidptrs, make_ptr_type(type_void));
     vec_push(two_voidptrs, make_ptr_type(type_void));
     define_builtin("__builtin_return_address", make_ptr_type(type_void), voidptr);

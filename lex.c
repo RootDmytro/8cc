@@ -27,7 +27,7 @@
 #include <string.h>
 #include "8cc.h"
 
-static Vector *buffers = &EMPTY_VECTOR;
+static Vector *buffers = EMPTY_VECTOR;
 static Token *space_token = &(Token){ TSPACE };
 static Token *newline_token = &(Token){ TNEWLINE };
 static Token *eof_token = &(Token){ TEOF };
@@ -41,7 +41,7 @@ static Pos pos;
 
 static char *pos_string(Pos *p) {
     File *f = current_file();
-    return format("%s:%d:%d", f ? f->name : "(unknown)", p->line, p->column);
+    return format("%s:%d:%d", f ? file_name(f) : "(unknown)", p->line, p->column);
 }
 
 #define errorp(p, ...) errorf(__FILE__ ":" STR(__LINE__), pos_string(&p), __VA_ARGS__)
@@ -50,20 +50,20 @@ static char *pos_string(Pos *p) {
 static void skip_block_comment(void);
 
 void lex_init(char *filename) {
-    vec_push(buffers, make_vector());
+    vec_push(buffers, vec_new());
     if (!strcmp(filename, "-")) {
-        stream_push(make_file(stdin, "-"));
+        stream_push(file_init(file_alloc(), stdin, "-"));
         return;
     }
     FILE *fp = fopen(filename, "r");
     if (!fp)
         error("Cannot open %s: %s", filename, strerror(errno));
-    stream_push(make_file(fp, filename));
+    stream_push(file_init(file_alloc(), fp, filename));
 }
 
 static Pos get_pos(int delta) {
     File *f = current_file();
-    return (Pos){ f->line, f->column + delta };
+    return (Pos){ file_line(f), file_column(f) + delta };
 }
 
 static void mark() {
@@ -78,7 +78,7 @@ static Token *make_token(Token *tmpl) {
     r->file = f;
     r->line = pos.line;
     r->column = pos.column;
-    r->count = f->ntok++;
+    r->count = file_ntok_increment(f);
     return r;
 }
 
@@ -187,25 +187,32 @@ static void skip_string() {
 void skip_cond_incl() {
     int nest = 0;
     for (;;) {
-        bool bol = (current_file()->column == 1);
+        bool bol = file_column(current_file()) == 1;
         skip_space();
         int c = readc();
+
         if (c == EOF)
             return;
+
         if (c == '\'') {
             skip_char();
             continue;
         }
+
         if (c == '\"') {
             skip_string();
             continue;
         }
+
         if (c != '#' || !bol)
             continue;
-        int column = current_file()->column - 1;
+
+        int column = file_column(current_file()) - 1;
         Token *tok = lex();
+
         if (tok->kind != TIDENT)
             continue;
+
         if (!nest && (is_ident(tok, "else") || is_ident(tok, "elif") || is_ident(tok, "endif"))) {
             unget_token(tok);
             Token *hash = make_keyword('#');
@@ -214,10 +221,13 @@ void skip_cond_incl() {
             unget_token(hash);
             return;
         }
-        if (is_ident(tok, "if") || is_ident(tok, "ifdef") || is_ident(tok, "ifndef"))
+
+        if (is_ident(tok, "if") || is_ident(tok, "ifdef") || is_ident(tok, "ifndef")) {
             nest++;
-        else if (nest && is_ident(tok, "endif"))
+        } else if (nest && is_ident(tok, "endif")) {
             nest--;
+        }
+
         skip_line();
     }
 }
@@ -225,7 +235,7 @@ void skip_cond_incl() {
 // Reads a number literal. Lexer's grammar on numbers is not strict.
 // Integers and floating point numbers and different base numbers are not distinguished.
 static Token *read_number(char c) {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     buf_write(b, c);
     char last = c;
     for (;;) {
@@ -347,7 +357,7 @@ static Token *read_char(int enc) {
 
 // Reads a string literal.
 static Token *read_string(int enc) {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     for (;;) {
         int c = readc();
         if (c == EOF)
@@ -371,7 +381,7 @@ static Token *read_string(int enc) {
 }
 
 static Token *read_ident(char c) {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     buf_write(b, c);
     for (;;) {
         c = readc();
@@ -543,7 +553,7 @@ char *read_header_file_name(bool *std) {
     } else {
         return NULL;
     }
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     while (!next(close)) {
         int c = readc();
         if (c == EOF || c == '\n')
@@ -583,7 +593,7 @@ void unget_token(Token *tok) {
 // This function temporarily switches the main input stream to
 // a given string and reads one token.
 Token *lex_string(char *s) {
-    stream_stash(make_file_string(s));
+    stream_stash(file_init_string(file_alloc(), s));
     Token *r = do_read_token();
     next('\n');
     Pos p = get_pos(0);
@@ -599,7 +609,7 @@ Token *lex() {
         return vec_pop(buf);
     if (vec_len(buffers) > 1)
         return eof_token;
-    bool bol = (current_file()->column == 1);
+    bool bol = file_column(current_file()) == 1;
     Token *tok = do_read_token();
     while (tok->kind == TSPACE) {
         tok = do_read_token();

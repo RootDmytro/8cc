@@ -15,13 +15,13 @@ static char *REGS[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 static char *SREGS[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 static char *MREGS[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 static int TAB = 8;
-static Vector *functions = &EMPTY_VECTOR;
+static Vector *functions = EMPTY_VECTOR;
 static int stackpos;
 static int numgp;
 static int numfp;
 static FILE *outputfp;
-static Map *source_files = &EMPTY_MAP;
-static Map *source_lines = &EMPTY_MAP;
+static Map *source_files = EMPTY_MAP;
+static Map *source_lines = EMPTY_MAP;
 static char *last_loc = "";
 
 static void emit_addr(Node *node);
@@ -50,7 +50,7 @@ static void pop_function(void *ignore) {
 #endif
 
 static char *get_caller_list() {
-    Buffer *b = make_buffer();
+    Buffer *b = buf_init(buf_alloc());
     for (int i = 0; i < vec_len(functions); i++) {
         if (i > 0)
             buf_printf(b, " -> ");
@@ -1003,9 +1003,9 @@ static void emit_func_call(Node *node) {
     bool isptr = (node->kind == AST_FUNCPTR_CALL);
     Type *ftype = isptr ? node->fptr->ty->ptr : node->ftype;
 
-    Vector *ints = make_vector();
-    Vector *floats = make_vector();
-    Vector *rest = make_vector();
+    Vector *ints = vec_new();
+    Vector *floats = vec_new();
+    Vector *rest = vec_new();
     classify_args(ints, floats, rest, node->args);
     save_arg_regs(vec_len(ints), vec_len(floats));
 

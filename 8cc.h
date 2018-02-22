@@ -10,6 +10,15 @@
 #include <stdio.h>
 #include <stdnoreturn.h>
 #include <time.h>
+#include <stdint.h>
+
+#include "file.h"
+#include "set.h"
+#include "dict.h"
+#include "vector.h"
+#include "buffer.h"
+#include "map.h"
+
 
 enum {
     TIDENT,
@@ -33,50 +42,6 @@ enum {
     ENC_UTF8,
     ENC_WCHAR,
 };
-
-typedef struct Map {
-    struct Map *parent;
-    char **key;
-    void **val;
-    int size;
-    int nelem;
-    int nused;
-} Map;
-
-typedef struct {
-    void **body;
-    int len;
-    int nalloc;
-} Vector;
-
-typedef struct {
-    struct Map *map;
-    Vector *key;
-} Dict;
-
-typedef struct Set {
-    char *v;
-    struct Set *next;
-} Set;
-
-typedef struct {
-    char *body;
-    int nalloc;
-    int len;
-} Buffer;
-
-typedef struct {
-    FILE *file;  // stream backed by FILE *
-    char *p;     // stream backed by string
-    char *name;
-    int line;
-    int column;
-    int ntok;     // token counter
-    int last;     // the last character read from file
-    int buf[3];   // push-back buffer for unread operations
-    int buflen;   // push-back buffer size
-    time_t mtime; // last modified time. 0 if string-backed file
-} File;
 
 typedef struct {
     int kind;
@@ -294,26 +259,11 @@ extern Type *type_float;
 extern Type *type_double;
 extern Type *type_ldouble;
 
-#define EMPTY_MAP ((Map){})
-#define EMPTY_VECTOR ((Vector){})
 
 // encoding.c
 Buffer *to_utf16(char *p, int len);
 Buffer *to_utf32(char *p, int len);
 void write_utf8(Buffer *b, uint32_t rune);
-
-// buffer.c
-Buffer *make_buffer(void);
-char *buf_body(Buffer *b);
-int buf_len(Buffer *b);
-void buf_write(Buffer *b, char c);
-void buf_append(Buffer *b, char *s, int len);
-void buf_printf(Buffer *b, char *fmt, ...);
-char *vformat(char *fmt, va_list ap);
-char *format(char *fmt, ...);
-char *quote_cstring(char *p);
-char *quote_cstring_len(char *p, int len);
-char *quote_char(char c);
 
 // cpp.c
 void read_from_string(char *buf);
@@ -330,11 +280,6 @@ char *ty2s(Type *ty);
 char *node2s(Node *node);
 char *tok2s(Token *tok);
 
-// dict.c
-Dict *make_dict(void);
-void *dict_get(Dict *dict, char *key);
-void dict_put(Dict *dict, char *key, void *val);
-Vector *dict_keys(Dict *dict);
 
 // error.c
 extern bool enable_warning;
@@ -353,18 +298,6 @@ noreturn void errorf(char *line, char *pos, char *fmt, ...);
 void warnf(char *line, char *pos, char *fmt, ...);
 char *token_pos(Token *tok);
 
-// file.c
-File *make_file(FILE *file, char *name);
-File *make_file_string(char *s);
-int readc(void);
-void unreadc(int c);
-File *current_file(void);
-void stream_push(File *file);
-int stream_depth(void);
-char *input_position(void);
-void stream_stash(File *f);
-void stream_unstash(void);
-
 // gen.c
 void set_output_file(FILE *fp);
 void close_output_file(void);
@@ -382,14 +315,6 @@ void unget_token(Token *tok);
 Token *lex_string(char *s);
 Token *lex(void);
 
-// map.c
-Map *make_map(void);
-Map *make_map_parent(Map *parent);
-void *map_get(Map *m, char *key);
-void map_put(Map *m, char *key, void *val);
-void map_remove(Map *m, char *key);
-size_t map_len(Map *m);
-
 // parse.c
 char *make_tempname(void);
 char *make_label(void);
@@ -401,26 +326,5 @@ Node *read_expr(void);
 Vector *read_toplevels(void);
 void parse_init(void);
 char *fullpath(char *path);
-
-// set.c
-Set *set_add(Set *s, char *v);
-bool set_has(Set *s, char *v);
-Set *set_union(Set *a, Set *b);
-Set *set_intersection(Set *a, Set *b);
-
-// vector.c
-Vector *make_vector(void);
-Vector *make_vector1(void *e);
-Vector *vec_copy(Vector *src);
-void vec_push(Vector *vec, void *elem);
-void vec_append(Vector *a, Vector *b);
-void *vec_pop(Vector *vec);
-void *vec_get(Vector *vec, int index);
-void vec_set(Vector *vec, int index, void *val);
-void *vec_head(Vector *vec);
-void *vec_tail(Vector *vec);
-Vector *vec_reverse(Vector *vec);
-void *vec_body(Vector *vec);
-int vec_len(Vector *vec);
 
 #endif
