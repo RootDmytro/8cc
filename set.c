@@ -67,7 +67,7 @@ Set *set_intersection(Set *a, Set *b) {
 
 void set_free(Set *s) {
     for (Set *next; s; s = next) {
-		next = s->next;
-		free(s);
+        next = s->next;
+        free(s);
     }
 }

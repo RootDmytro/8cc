@@ -74,37 +74,37 @@ File *file_init_string(File *f, char *s) {
 }
 
 const char *file_name(File *f) {
-	return f->name;
+    return f->name;
 }
 
 void file_set_name(File *f, const char *name) {
-	#warning this must be solved by introduction of String objects with reference counting
-	//free((void *)f->name);
-	f->name = /*strdup*/(name);
+#warning this must be solved by introduction of String objects with reference counting
+    //free((void *)f->name);
+    f->name = /*strdup*/(name);
 }
 
 int file_line(File *f) {
-	return f->line;
+    return f->line;
 }
 
 void file_set_line(File *f, int line) {
-	f->line = line;
+    f->line = line;
 }
 
 int file_column(File *f) {
-	return f->column;
+    return f->column;
 }
 
 void file_set_column(File *f, int column) {
-	f->column = column;
+    f->column = column;
 }
 
 int file_ntok_increment(File *f) {
-	return f->ntok++;
+    return f->ntok++;
 }
 
 time_t file_mtime(File *f) {
-	return f->mtime;
+    return f->mtime;
 }
 
 static void file_close(File *f) {
@@ -159,11 +159,11 @@ static int file_readc_string(File *f) {
 }
 
 void file_free(File *f) {
-	file_close(f);
-	f->file = NULL;
+    file_close(f);
+    f->file = NULL;
 
-	free((void *)f->name);
-	f->name = NULL;
+    free((void *)f->name);
+    f->name = NULL;
 
     free(f);
 }
@@ -199,7 +199,7 @@ static int get() {
 }
 
 int readc() {
-	int c;
+    int c;
 
     for (;;) {
         c = get();
@@ -222,8 +222,8 @@ int readc() {
         int c2 = get();
 
         if (c2 != '\n') {
-			unreadc(c2);
-			break;
+            unreadc(c2);
+            break;
         }
     }
 
@@ -233,7 +233,7 @@ int readc() {
 void unreadc(int c) {
     if (c == EOF) {
         return;
-	}
+    }
 
     File *f = vec_tail(files);
     assert(f->buflen < sizeof(f->buf) / sizeof(f->buf[0]));

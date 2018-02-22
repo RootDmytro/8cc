@@ -76,8 +76,8 @@ void buf_printf(Buffer *b, char *fmt, ...) {
 }
 
 void buf_free(Buffer *b) {
-	free(b->body);
-	free(b);
+    free(b->body);
+    free(b);
 }
 
 

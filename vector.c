@@ -36,8 +36,8 @@ static int round_to_pow2(int n) {
 ///////////////////////////////////
 
 Vector *vec_alloc(void) {
-	Vector *r = calloc(1, sizeof(Vector));
-	r->body = NULL;
+    Vector *r = calloc(1, sizeof(Vector));
+    r->body = NULL;
     return r;
 }
 
@@ -54,7 +54,7 @@ Vector *vec_init_size(Vector *vec, int size) {
     if (size > 0) {
         vec->body = calloc(size, sizeof(void *));
     } else {
-    	vec->body = NULL;
+        vec->body = NULL;
     }
 
     vec->len = 0;
@@ -65,13 +65,13 @@ Vector *vec_init_size(Vector *vec, int size) {
 static void vec_extend(Vector *vec, int delta) {
     if (vec->len + delta <= vec->nalloc) {
         return;
-	}
+    }
 
     int nelem = max(round_to_pow2(vec->len + delta), MIN_SIZE);
     void *newbody = calloc(nelem, sizeof(void *));
 
     if (vec->body) {
-		memcpy(newbody, vec->body, sizeof(void *) * vec->len);
+        memcpy(newbody, vec->body, sizeof(void *) * vec->len);
     }
 
     free(vec->body);
@@ -150,7 +150,7 @@ int vec_len(Vector *vec) {
 
 void vec_each(Vector *vec, fptr_t *fptr) {
     for (int i = 0; i < vec->len; i++) {
-		fptr(vec->body[i]);
+        fptr(vec->body[i]);
     }
 }
 

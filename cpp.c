@@ -791,7 +791,7 @@ static void read_line() {
     file_set_line(file, line);
 
     if (filename) {
-		file_set_name(file, filename);
+        file_set_name(file, filename);
     }
 }
 

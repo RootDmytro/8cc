@@ -13,9 +13,9 @@ typedef struct Dict {
 
 
 Dict *dict_alloc(void) {
-	Dict *r = calloc(1, sizeof(Dict));
-	r->map = NULL;
-	r->key = NULL;
+    Dict *r = calloc(1, sizeof(Dict));
+    r->map = NULL;
+    r->key = NULL;
     return r;
 }
 
@@ -26,7 +26,7 @@ Dict *dict_init(Dict *dict) {
 }
 
 Dict *dict_new(void) {
-	return dict_init(dict_alloc());
+    return dict_init(dict_alloc());
 }
 
 void *dict_get(Dict *dict, char *key) {
@@ -43,7 +43,7 @@ Vector *dict_keys(Dict *dict) {
 }
 
 void dict_free(Dict *dict) {
-	map_free(dict->map);
-	vec_free(dict->key);
+    map_free(dict->map);
+    vec_free(dict->key);
     free(dict);
 }
