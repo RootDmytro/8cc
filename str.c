@@ -1,6 +1,6 @@
 // string.c
 
-#include "string.h"
+#include "str.h"
 #include <string.h>
 
 

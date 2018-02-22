@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include "8cc.h"
+#include "srcstream.h"
 
 char *get_base_file(void) { return NULL; }
 

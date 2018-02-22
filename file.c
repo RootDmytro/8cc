@@ -27,9 +27,18 @@
 #include "file.h"
 
 
+typedef struct File_vtbl {
+    void (*file_close)(File *f);
+    int (*file_readc)(File *f);
+} File_vtbl;
+
+
 typedef struct File {
-    FILE *file;  // stream backed by FILE *
-    char *p;     // stream backed by string
+    File_vtbl *vptr;
+    union {
+        FILE *file;  // stream backed by FILE *
+        char *p;     // stream backed by string
+    };
     const char *name;
     int line;
     int column;
@@ -41,18 +50,28 @@ typedef struct File {
 } File;
 
 
+void file_close_file(File *f);
+void file_close_string(File *f);
+
+int file_readc_file(File *f);
+int file_readc_string(File *f);
+
+
+File_vtbl File_vtable = {file_close_file, file_readc_file};
+File_vtbl FileString_vtbl = {file_close_string, file_readc_string};
+
+
 File *file_alloc(void) {
     File *r = calloc(1, sizeof(File));
-    r->file = NULL;
-    r->p = NULL;
-    r->name = NULL;
     return r;
 }
 
 
 File *file_init(File *f, FILE *file, const char *name) {
+    assert(file != NULL);
+    assert(name != NULL);
+    f->vptr = &File_vtable;
     f->file = file;
-    f->p = NULL;
     f->name = strdup(name);
     f->line = 1;
     f->column = 1;
@@ -66,7 +85,8 @@ File *file_init(File *f, FILE *file, const char *name) {
 }
 
 File *file_init_string(File *f, char *s) {
-    f->file = NULL;
+    assert(s != NULL);
+    f->vptr = &FileString_vtbl;
     f->p = s;
     f->line = 1;
     f->column = 1;
@@ -107,18 +127,11 @@ time_t file_mtime(File *f) {
     return f->mtime;
 }
 
-static void file_close(File *f) {
-#warning virtual method must be used here
-    if (f->file) {
-        fclose(f->file);
-        f->file = NULL;
-    } else {
-        free(f->p);
-        f->file = NULL;
-    }
+int file_readc(File *f) {
+    return f->vptr->file_readc(f);
 }
 
-static int file_readc(File *f) {
+int file_readc_file(File *f) {
     int c = getc(f->file);
 
     if (c == EOF) {
@@ -137,7 +150,7 @@ static int file_readc(File *f) {
     return c;
 }
 
-static int file_readc_string(File *f) {
+int file_readc_string(File *f) {
     int c;
 
     if (*f->p == '\0') {
@@ -158,35 +171,13 @@ static int file_readc_string(File *f) {
     return c;
 }
 
-void file_free(File *f) {
-    file_close(f);
-    f->file = NULL;
-
-    free((void *)f->name);
-    f->name = NULL;
-
-    free(f);
-}
-
-////////////////////////////////////
-// following must be in a separate file
-
-#include "vector.h"
-
-static Vector *files = EMPTY_VECTOR;
-static Vector *stashed = EMPTY_VECTOR;
-
-static int get() {
-    File *f = vec_tail(files);
+int file_getc(File *f) {
     int c;
 
     if (f->buflen > 0) {
         c = f->buf[--f->buflen];
-    } else if (f->file) {
-#warning virtual method must be used here
-        c = file_readc(f);
     } else {
-        c = file_readc_string(f);
+        c = file_readc(f);
     }
 
     if (c == '\n') {
@@ -198,44 +189,11 @@ static int get() {
     return c;
 }
 
-int readc() {
-    int c;
-
-    for (;;) {
-        c = get();
-
-        if (c == EOF) {
-            if (vec_len(files) == 1) {
-                break;
-            }
-
-            File *f = vec_pop(files);
-            file_close(f);
-#warning 'files' relinquishing responsibility for 'f' without explicit handover (preceding reference sharing has occured)
-            continue;
-        }
-
-        if (c != '\\') {
-            break;
-        }
-
-        int c2 = get();
-
-        if (c2 != '\n') {
-            unreadc(c2);
-            break;
-        }
-    }
-
-    return c;
-}
-
-void unreadc(int c) {
+void file_unreadc(File *f, int c) {
     if (c == EOF) {
         return;
     }
 
-    File *f = vec_tail(files);
     assert(f->buflen < sizeof(f->buf) / sizeof(f->buf[0]));
     f->buf[f->buflen++] = c;
 
@@ -247,33 +205,26 @@ void unreadc(int c) {
     }
 }
 
-File *current_file() {
-    return vec_tail(files);
+void file_close(File *f) {
+    f->vptr->file_close(f);
 }
 
-void stream_push(File *f) {
-    vec_push(files, f);
+void file_close_file(File *f) {
+    fclose(f->file);
+    f->file = NULL;
 }
 
-int stream_depth() {
-    return vec_len(files);
+void file_close_string(File *f) {
+    free(f->p);
+    f->p = NULL;
 }
 
-char *input_position() {
-    if (vec_len(files) == 0) {
-        return "(unknown)";
-    }
+void file_free(File *f) {
+    file_close(f);
 
-    File *f = vec_tail(files);
-    return format("%s:%d:%d", f->name, f->line, f->column);
+    free((void *)f->name);
+    f->name = NULL;
+
+    free(f);
 }
 
-void stream_stash(File *f) {
-    vec_push(stashed, files);
-    files = vec_new1(f);
-}
-
-void stream_unstash() {
-    files = vec_pop(stashed);
-#warning memory leak: files
-}

@@ -1,5 +1,10 @@
 // file.h
 
+#ifndef FILE_H_INCLUDED
+#define FILE_H_INCLUDED
+
+#include <time.h>
+
 // 2. File must be renamed to Stream
 typedef struct File File;
 
@@ -9,6 +14,7 @@ typedef struct _IO_FILE FILE;
 File *file_alloc(void);
 File *file_init(File *f, FILE *file, const char *name);
 File *file_init_string(File *f, char *s);
+
 
 const char *file_name(File *f);
 void file_set_name(File *f, const char *name);
@@ -23,14 +29,14 @@ int file_ntok_increment(File *f);
 
 time_t file_mtime(File *f);
 
+
+int file_readc(File *f);
+int file_getc(File *f);
+void file_unreadc(File *f, int c);
+
+void file_close(File *f);
+
+
 void file_free(File *f);
 
-// 1. following must be in a separate file
-int readc(void);
-void unreadc(int c);
-File *current_file(void);
-void stream_push(File *file);
-int stream_depth(void);
-char *input_position(void);
-void stream_stash(File *f);
-void stream_unstash(void);
+#endif // FILE_H_INCLUDED

@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "8cc.h"
+#include "srcstream.h"
 
 static Vector *buffers = EMPTY_VECTOR;
 static Token *space_token = &(Token){ TSPACE };
