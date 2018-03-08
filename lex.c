@@ -42,7 +42,7 @@ static Pos pos;
 
 static char *pos_string(Pos *p) {
     File *f = current_file();
-    return format("%s:%d:%d", f ? file_name(f) : "(unknown)", p->line, p->column);
+    return format("%s:%d:%d", f ? str_get(file_name(f)) : "(unknown)", p->line, p->column);
 }
 
 #define errorp(p, ...) errorf(__FILE__ ":" STR(__LINE__), pos_string(&p), __VA_ARGS__)
@@ -53,13 +53,13 @@ static void skip_block_comment(void);
 void lex_init(char *filename) {
     vec_push(buffers, vec_new());
     if (!strcmp(filename, "-")) {
-        stream_push(file_init(file_alloc(), stdin, "-"));
+        stream_push(file_init(file_alloc(), stdin, str_new("-")));
         return;
     }
     FILE *fp = fopen(filename, "r");
     if (!fp)
         error("Cannot open %s: %s", filename, strerror(errno));
-    stream_push(file_init(file_alloc(), fp, filename));
+    stream_push(file_init(file_alloc(), fp, str_new(filename)));
 }
 
 static Pos get_pos(int delta) {

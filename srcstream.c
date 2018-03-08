@@ -3,7 +3,9 @@
 #include <stdio.h>
 #include "file.h"
 #include "vector.h"
+#include "str.h"
 #include "srcstream.h"
+#include "buffer.h"
 
 static Vector/*<File *> */ *files = EMPTY_VECTOR;
 static Vector/*<Vector<File *> *> */ *stashed = EMPTY_VECTOR;
@@ -27,7 +29,7 @@ int readc() {
 
             File *f = vec_pop(files);
             file_close(f);
-#warning 'files' relinquishing responsibility for value of 'f' without explicit handover (preceding reference sharing has occured)
+#warning 'files' relinquishes responsibility for value of 'f' without explicit handover (preceding reference sharing has occured)
             continue;
         }
 
@@ -73,7 +75,7 @@ char *input_position() {
     }
 
     File *f = vec_tail(files);
-    return format("%s:%d:%d", file_name(f), file_line(f), file_column(f));
+    return format("%s:%d:%d", str_get(file_name(f)), file_line(f), file_column(f));
 }
 
 void stream_stash(File *file) {
@@ -82,6 +84,8 @@ void stream_stash(File *file) {
 }
 
 void stream_unstash() {
+    Vector *vec = files;
     files = vec_pop(stashed);
+    vec_free(vec);
 #warning memory leak: files
 }

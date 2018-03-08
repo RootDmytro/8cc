@@ -14,8 +14,8 @@ void buf_printf(Buffer *b, char *fmt, ...);
 
 void buf_free(Buffer *b);
 
-char *vformat(char *fmt, va_list ap);
-char *format(char *fmt, ...);
-char *quote_cstring(char *p);
-char *quote_cstring_len(char *p, int len);
+char *vformat(const char *fmt, va_list ap);
+char *format(const char *fmt, ...);
+char *quote_cstring(const char *p);
+char *quote_cstring_len(const char *p, int len);
 char *escape_char(char c);

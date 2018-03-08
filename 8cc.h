@@ -18,6 +18,8 @@
 #include "vector.h"
 #include "buffer.h"
 #include "map.h"
+#include "str.h"
+#include "srcloc.h"
 
 
 enum {
@@ -75,7 +77,7 @@ enum {
     AST_LVAR,
     AST_GVAR,
     AST_TYPEDEF,
-    AST_FUNCALL,
+    AST_FUNCALL, // 260
     AST_FUNCPTR_CALL,
     AST_FUNCDESG,
     AST_FUNC,
@@ -85,7 +87,7 @@ enum {
     AST_ADDR,
     AST_DEREF,
     AST_IF,
-    AST_TERNARY,
+    AST_TERNARY, // 270
     AST_DEFAULT,
     AST_RETURN,
     AST_COMPOUND_STMT,
@@ -95,7 +97,7 @@ enum {
     AST_LABEL,
     OP_SIZEOF,
     OP_CAST,
-    OP_SHR,
+    OP_SHR, // 280
     OP_SHL,
     OP_A_SHR,
     OP_A_SHL,
@@ -154,11 +156,6 @@ typedef struct Type {
     bool hasva;
     bool oldstyle;
 } Type;
-
-typedef struct {
-    char *file;
-    int line;
-} SourceLoc;
 
 typedef struct Node {
     int kind;

@@ -13,12 +13,15 @@ String *str_init_length(String *str, const char *string, unsigned long length);
 
 String *str_new(const char *str);
 String *str_new_length(const char *string, unsigned long length);
-String *str_copy(String *str);
+String *str_copy(const String *str);
 
-const char *str_get(String *vec);
-unsigned long str_length(String *vec);
+const char *str_get(const String *str);
+unsigned long str_length(const String *str);
+
+int str_cmp(const String *str, const String *other);
 
 String *str_retain(String *object);
 void str_release(String *object);
+String *str_assign(String **pointer, String *newValue);
 
 #endif // STRING_H_INCLUDED

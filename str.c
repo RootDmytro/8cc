@@ -33,16 +33,20 @@ String *str_new_length(const char *string, unsigned long length) {
     return r;
 }
 
-String *str_copy(String *str) {
+String *str_copy(const String *str) {
     return str_new(str_get(str));
 }
 
-const char *str_get(String *str) {
+const char *str_get(const String *str) {
     return str->string;
 }
 
-unsigned long str_length(String *str) {
+unsigned long str_length(const String *str) {
     return strlen(str_get(str));
+}
+
+int str_cmp(const String *str, const String *other) {
+    return strcmp(str_get(str), str_get(other));
 }
 
 String *str_retain(String *object) {
@@ -51,4 +55,8 @@ String *str_retain(String *object) {
 
 void str_release(String *object) {
     obj_release((Object *)object);
+}
+
+String *str_assign(String **pointer, String *newValue) {
+    return (String *)obj_assign((Object **)pointer, (Object *)newValue);
 }

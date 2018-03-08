@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include "8cc.h"
 
-#warning argument is modyfied while result is escaping, likely memory leak
+#warning argument is modified while result is escaping, likely memory leak
 // Returns the shortest path for the given full path to a file.
 static char *clean(char *p) {
     assert(*p == '/');
@@ -40,7 +40,7 @@ static char *clean(char *p) {
     }
 }
 
-#warning argument is modyfied while result is escaping, likely memory leak
+#warning argument is modified while result is escaping, likely memory leak
 // Returns the shortest absolute path for the given path.
 char *fullpath(char *path) {
     static char cwd[PATH_MAX];

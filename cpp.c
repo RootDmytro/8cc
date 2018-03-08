@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "8cc.h"
+#include "srcstream.h"
 
 static Map *macros = EMPTY_MAP;
 static Map *once = EMPTY_MAP;
@@ -599,7 +600,7 @@ static void read_endif(Token *hash) {
         return;
     Token *last = skip_newlines();
     if (ci->file != last->file)
-        map_put(include_guard, file_name(ci->file), ci->include_guard);
+        map_put(include_guard, str_get(file_name(ci->file)), ci->include_guard);
 }
 
 /*
@@ -677,16 +678,22 @@ static bool guarded(char *path) {
 
 static bool try_include(char *dir, char *filename, bool isimport) {
     char *path = fullpath(format("%s/%s", dir, filename));
+
     if (map_get(once, path))
         return true;
+
     if (guarded(path))
         return true;
+
     FILE *fp = fopen(path, "r");
     if (!fp)
         return false;
+
     if (isimport)
         map_put(once, path, (void *)1);
-    stream_push(file_init(file_alloc(), fp, path));
+
+    stream_push(file_init(file_alloc(), fp, str_new(path)));
+#warning memory leak: path
     return true;
 }
 
@@ -700,7 +707,7 @@ static void read_include(Token *hash, File *file, bool isimport) {
         goto err;
     }
     if (!std) {
-        char *dir = file_name(file) ? dirname(strdup(file_name(file))) : ".";
+        char *dir = file_name(file) ? dirname(strdup(str_get(file_name(file)))) : ".";
         if (try_include(dir, filename, isimport))
             return;
     }
@@ -724,7 +731,7 @@ static void read_include_next(Token *hash, File *file) {
             return;
         goto err;
     }
-    const char *cur = fullpath(strdup(file_name(file)));
+    const char *cur = fullpath(strdup(str_get(file_name(file))));
     int i = 0;
     for (; i < vec_len(std_include_path); i++) {
         char *dir = vec_get(std_include_path, i);
@@ -745,7 +752,7 @@ static void read_include_next(Token *hash, File *file) {
 static void parse_pragma_operand(Token *tok) {
     char *s = tok->sval;
     if (!strcmp(s, "once")) {
-        char *path = fullpath(strdup(file_name(tok->file)));
+        char *path = fullpath(strdup(str_get(file_name(tok->file))));
         map_put(once, path, (void *)1);
     } else if (!strcmp(s, "enable_warning")) {
         enable_warning = true;
@@ -778,10 +785,10 @@ static void read_line() {
         errort(tok, "number expected after #line, but got %s", tok2s(tok));
     int line = atoi(tok->sval);
     tok = read_expand_newline();
-    char *filename = NULL;
+    String *filename = Nil;
 
     if (tok->kind == TSTRING) {
-        filename = tok->sval;
+        filename = str_new(tok->sval);
         expect_newline();
     } else if (tok->kind != TNEWLINE) {
         errort(tok, "newline or a source name are expected, but got %s", tok2s(tok));
@@ -804,7 +811,7 @@ static void read_linemarker(Token *tok) {
     tok = lex();
     if (tok->kind != TSTRING)
         errort(tok, "filename expected, but got %s", tok2s(tok));
-    char *filename = tok->sval;
+    String *filename = str_new(tok->sval);
 
     do {
         tok = lex();
@@ -887,7 +894,7 @@ static void handle_timestamp_macro(Token *tmpl) {
 }
 
 static void handle_file_macro(Token *tmpl) {
-    make_token_pushback(tmpl, TSTRING, file_name(tmpl->file));
+    make_token_pushback(tmpl, TSTRING, strdup(str_get(file_name(tmpl->file))));
 }
 
 static void handle_line_macro(Token *tmpl) {

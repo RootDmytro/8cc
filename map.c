@@ -96,7 +96,7 @@ static void maybe_rehash(Map *m) {
     m->nused = m->nelem;
 }
 
-static void *map_get_nostack(Map *m, const char *key) {
+static void *map_get_nostack(const Map *m, const char *key) {
     if (!m->key)
         return NULL;
     int mask = m->size - 1;
@@ -107,7 +107,7 @@ static void *map_get_nostack(Map *m, const char *key) {
     return NULL;
 }
 
-void *map_get(Map *m, const char *key) {
+void *map_get(const Map *m, const char *key) {
     void *v = map_get_nostack(m, key);
     if (v)
         return v;
@@ -125,7 +125,7 @@ void map_put(Map *m, const char *key, void *val) {
     for (;; i = (i + 1) & mask) {
         char *k = m->key[i];
         if (k == NULL || k == TOMBSTONE) {
-            m->key[i] = key;
+            m->key[i] = strdup(key);
             m->val[i] = val;
             m->nelem++;
             if (k == NULL)

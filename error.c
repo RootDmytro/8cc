@@ -39,6 +39,6 @@ char *token_pos(Token *tok) {
     File *f = tok->file;
     if (!f)
         return "(unknown)";
-    const char *name = file_name(f) ? file_name(f) : "(unknown)";
+    const char *name = file_name(f) ? str_get(file_name(f)) : "(unknown)";
     return format("%s:%d:%d", name, tok->line, tok->column);
 }

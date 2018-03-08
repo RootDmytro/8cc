@@ -24,7 +24,7 @@ Map *map_init_size(Map *m, const Map *parent, int size);
 Map *map_new(void);
 Map *map_new_parent(const Map *parent);
 
-void *map_get(Map *m, const char *key);
+void *map_get(const Map *m, const char *key);
 void map_put(Map *m, const char *key, void *val);
 void map_remove(Map *m, const char *key);
 size_t map_len(Map *m);

@@ -82,7 +82,7 @@ void buf_free(Buffer *b) {
 
 
 
-char *vformat(char *fmt, va_list ap) {
+char *vformat(const char *fmt, va_list ap) {
     Buffer *b = buf_init(buf_alloc());
     va_list aq;
     int written;
@@ -106,7 +106,7 @@ char *vformat(char *fmt, va_list ap) {
 #warning memory leak: b->body escaping
 }
 
-char *format(char *fmt, ...) {
+char *format(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     char *r = vformat(fmt, ap);
@@ -138,7 +138,7 @@ static void print(Buffer *b, char c) {
     }
 }
 
-char *quote_cstring(char *p) {
+char *quote_cstring(const char *p) {
     Buffer *b = buf_init(buf_alloc());
     while (*p)
         print(b, *p++);
@@ -147,7 +147,7 @@ char *quote_cstring(char *p) {
 #warning memory leak: b->body escaping
 }
 
-char *quote_cstring_len(char *p, int len) {
+char *quote_cstring_len(const char *p, int len) {
     Buffer *b = buf_init(buf_alloc());
     for (int i = 0; i < len; i++)
         print(b, p[i]);

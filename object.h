@@ -5,6 +5,8 @@
 #ifndef OBJECT_H_INCLUDED
 #define OBJECT_H_INCLUDED
 
+#define Nil ((void *)0)
+
 typedef struct Object Object;
 
 typedef void (deinit_ptr_t)(Object *object);
@@ -20,6 +22,9 @@ Object *obj_retain(Object *object);
 void obj_release(Object *object);
 
 /// don't use this method unless you are sure that you know what you are doing
-void obj_free(Object *object);
+void _obj_free(Object *object);
+
+/// convenience method that safely assigns
+Object *obj_assign(Object **pointer, Object *newValue);
 
 #endif // OBJECT_H_INCLUDED

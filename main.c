@@ -103,7 +103,7 @@ static void parse_m_arg(char *s) {
         error("Only 64 is allowed for -m, but got %s", s);
 }
 
-static void parseopt(int argc, const char **argv) {
+static void parseopt(int argc, char * const *argv) {
     cppdefs = buf_init(buf_alloc());
     for (;;) {
         int opt = getopt(argc, argv, "I:ED:O:SU:W:acd:f:gm:o:hw");
@@ -164,7 +164,7 @@ static void preprocess() {
     exit(0);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char * const *argv) {
     setbuf(stdout, NULL);
     if (atexit(delete_temp_files))
         perror("atexit");

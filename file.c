@@ -24,7 +24,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "8cc.h"
 #include "file.h"
+#include "str.h"
 
 
 typedef struct File_vtbl {
@@ -39,7 +41,7 @@ typedef struct File {
         FILE *file;  // stream backed by FILE *
         char *p;     // stream backed by string
     };
-    const char *name;
+    String *name;
     int line;
     int column;
     int ntok;     // token counter
@@ -67,12 +69,12 @@ File *file_alloc(void) {
 }
 
 
-File *file_init(File *f, FILE *file, const char *name) {
+File *file_init(File *f, FILE *file, String *name) {
     assert(file != NULL);
     assert(name != NULL);
     f->vptr = &File_vtable;
     f->file = file;
-    f->name = strdup(name);
+    f->name = str_retain(name);
     f->line = 1;
     f->column = 1;
 
@@ -84,23 +86,21 @@ File *file_init(File *f, FILE *file, const char *name) {
     return f;
 }
 
-File *file_init_string(File *f, char *s) {
-    assert(s != NULL);
+File *file_init_string(File *f, const char *s) {
+    assert(s != Nil);
     f->vptr = &FileString_vtbl;
-    f->p = s;
+    f->p = strdup(s);
     f->line = 1;
     f->column = 1;
     return f;
 }
 
-const char *file_name(File *f) {
+String *file_name(File *f) {
     return f->name;
 }
 
-void file_set_name(File *f, const char *name) {
-#warning this must be solved by introduction of String objects with reference counting
-    //free((void *)f->name);
-    f->name = /*strdup*/(name);
+void file_set_name(File *f, String *name) {
+    str_assign(&f->name, name);
 }
 
 int file_line(File *f) {
@@ -153,7 +153,7 @@ int file_readc_file(File *f) {
 int file_readc_string(File *f) {
     int c;
 
-    if (*f->p == '\0') {
+    if (*f->p == 0) {
         c = (f->last == '\n' || f->last == EOF) ? EOF : '\n';
     } else if (*f->p == '\r') {
         f->p++;
@@ -222,8 +222,7 @@ void file_close_string(File *f) {
 void file_free(File *f) {
     file_close(f);
 
-    free((void *)f->name);
-    f->name = NULL;
+    str_assign(&f->name, Nil);
 
     free(f);
 }

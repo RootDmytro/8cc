@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "8cc.h"
+#include "srcloc.h"
 
 bool dumpstack = false;
 bool dumpsource = true;
@@ -803,7 +804,7 @@ static char **split(char *buf) {
     return r;
 }
 
-static char **read_source_file(char *file) {
+static char **read_source_file(const char *file) {
     FILE *fp = fopen(file, "r");
     if (!fp)
         return NULL;
@@ -819,9 +820,10 @@ static char **read_source_file(char *file) {
     return split(buf);
 }
 
-static void maybe_print_source_line(char *file, int line) {
+static void maybe_print_source_line(const char *file, int line) {
     if (!dumpsource)
         return;
+
     char **lines = map_get(source_lines, file);
     if (!lines) {
         lines = read_source_file(file);
@@ -829,26 +831,29 @@ static void maybe_print_source_line(char *file, int line) {
             return;
         map_put(source_lines, file, lines);
     }
-    int len = 0;
-    for (char **p = lines; *p; p++)
-        len++;
-    emit_nostack("# %s", lines[line - 1]);
+
+#warning used to be: emit_nostack("# %s", lines[line - 1]);
+    emit_nostack("# %s", lines[line]);
 }
 
 static void maybe_print_source_loc(Node *node) {
     if (!node->sourceLoc)
         return;
-    char *file = node->sourceLoc->file;
-    long fileno = (long)map_get(source_files, file);
+
+    String *filename = srcloc_filename(node->sourceLoc);
+    const char *filenameChars = str_get(filename);
+    long fileno = (long)map_get(source_files, filenameChars);
     if (!fileno) {
         fileno = map_len(source_files) + 1;
-        map_put(source_files, file, (void *)fileno);
-        emit(".file %ld \"%s\"", fileno, quote_cstring(file));
+        map_put(source_files, filenameChars, (void *)fileno);
+        emit(".file %ld \"%s\"", fileno, quote_cstring(filenameChars));
     }
-    char *loc = format(".loc %ld %d 0", fileno, node->sourceLoc->line);
+
+    int line = srcloc_line(node->sourceLoc);
+    char *loc = format(".loc %ld %d 0", fileno, line);
     if (strcmp(loc, last_loc)) {
         emit("%s", loc);
-        maybe_print_source_line(file, node->sourceLoc->line);
+        maybe_print_source_line(filenameChars, line);
     }
     last_loc = loc;
 }

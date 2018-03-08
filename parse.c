@@ -22,7 +22,7 @@
 
 // The last source location we want to point to when we find an error in the
 // source code.
-SourceLoc *source_loc;
+SourceLoc *source_loc = Nil;
 
 // Objects representing various scopes. Did you know C has so many different
 // scopes? You can use the same name for global variable, local variable,
@@ -115,9 +115,8 @@ enum {
 
 static void mark_location() {
     Token *tok = peek();
-    source_loc = malloc(sizeof(SourceLoc));
-    source_loc->file = file_name(tok->file);
-    source_loc->line = tok->line;
+    SourceLoc *newLoc = srcloc_new(file_name(tok->file), tok->line);
+    srcloc_assign(&source_loc, newLoc);
 }
 
 
@@ -152,34 +151,52 @@ static Map *env() {
     return localenv ? localenv : globalenv;
 }
 
-static Node *make_ast(Node *tmpl) {
-    Node *r = malloc(sizeof(Node));
-    *r = *tmpl;
-    r->sourceLoc = source_loc;
+static Node *make_ast(int kind) {
+    Node *r = calloc(1, sizeof(Node));
+
+    // this should be replaced by virtualization
+    r->kind = kind;
+
+    // this should be encapsulated in the setter of sourceLoc
+    srcloc_assign(&r->sourceLoc, source_loc);
+
     return r;
 }
 
 static Node *ast_uop(int kind, Type *ty, Node *operand) {
-    return make_ast(&(Node){ kind, ty, .operand = operand });
+    Node *r = make_ast(kind);
+    r->ty = ty;
+    r->operand = operand;
+    return r;
 }
 
 static Node *ast_binop(Type *ty, int kind, Node *left, Node *right) {
-    Node *r = make_ast(&(Node){ kind, ty });
+    Node *r = make_ast(kind);
+    r->ty = ty;
     r->left = left;
     r->right = right;
     return r;
 }
 
 static Node *ast_inttype(Type *ty, long val) {
-    return make_ast(&(Node){ AST_LITERAL, ty, .ival = val });
+    Node *r = make_ast(AST_LITERAL);
+    r->ty = ty;
+    r->ival = val;
+    return r;
 }
 
 static Node *ast_floattype(Type *ty, double val) {
-    return make_ast(&(Node){ AST_LITERAL, ty, .fval = val });
+    Node *r = make_ast(AST_LITERAL);
+    r->ty = ty;
+    r->fval = val;
+    return r;
 }
 
 static Node *ast_lvar(Type *ty, char *name) {
-    Node *r = make_ast(&(Node){ AST_LVAR, ty, .varname = name });
+    Node *r = make_ast(AST_LVAR);
+    r->ty = ty;
+    r->varname = name;
+
     if (localenv)
         map_put(localenv, name, r);
     if (localvars)
@@ -188,24 +205,30 @@ static Node *ast_lvar(Type *ty, char *name) {
 }
 
 static Node *ast_gvar(Type *ty, char *name) {
-    Node *r = make_ast(&(Node){ AST_GVAR, ty, .varname = name, .glabel = name });
+    Node *r = make_ast(AST_GVAR);
+    r->ty = ty;
+    r->varname = name;
+    r->glabel = name;
+
     map_put(globalenv, name, r);
     return r;
 }
 
 static Node *ast_static_lvar(Type *ty, char *name) {
-    Node *r = make_ast(&(Node){
-        .kind = AST_GVAR,
-        .ty = ty,
-        .varname = name,
-        .glabel = make_static_label(name) });
+    Node *r = make_ast(AST_GVAR);
+    r->ty = ty;
+    r->varname = name;
+    r->glabel = make_static_label(name);
+
     assert(localenv);
     map_put(localenv, name, r);
     return r;
 }
 
 static Node *ast_typedef(Type *ty, char *name) {
-    Node *r = make_ast(&(Node){ AST_TYPEDEF, ty });
+    Node *r = make_ast(AST_TYPEDEF);
+    r->ty = ty;
+
     map_put(env(), name, r);
     return r;
 }
@@ -234,96 +257,146 @@ static Node *ast_string(int enc, char *str, int len) {
         break;
     }
     }
-    return make_ast(&(Node){ AST_LITERAL, .ty = ty, .sval = body });
+
+    Node *r = make_ast(AST_LITERAL);
+    r->ty = ty;
+    r->sval = body;
+    return r;
 }
 
 static Node *ast_funcall(Type *ftype, char *fname, Vector *args) {
-    return make_ast(&(Node){
-        .kind = AST_FUNCALL,
-        .ty = ftype->rettype,
-        .fname = fname,
-        .args = args,
-        .ftype = ftype });
+    Node *r = make_ast(AST_FUNCALL);
+    r->ty = ftype->rettype;
+    r->fname = fname;
+    r->args = args;
+    r->ftype = ftype;
+    return r;
 }
 
 static Node *ast_funcdesg(Type *ty, char *fname) {
-    return make_ast(&(Node){ AST_FUNCDESG, ty, .fname = fname });
+    Node *r = make_ast(AST_FUNCDESG);
+    r->ty = ty;
+    r->fname = fname;
+    return r;
 }
 
 static Node *ast_funcptr_call(Node *fptr, Vector *args) {
     assert(fptr->ty->kind == KIND_PTR);
     assert(fptr->ty->ptr->kind == KIND_FUNC);
-    return make_ast(&(Node){
-        .kind = AST_FUNCPTR_CALL,
-        .ty = fptr->ty->ptr->rettype,
-        .fptr = fptr,
-        .args = args });
+
+    Node *r = make_ast(AST_FUNCPTR_CALL);
+    r->ty = fptr->ty->ptr->rettype;
+    r->fptr = fptr;
+    r->args = args;
+    return r;
 }
 
 static Node *ast_func(Type *ty, char *fname, Vector *params, Node *body, Vector *localvars) {
-    return make_ast(&(Node){
-        .kind = AST_FUNC,
-        .ty = ty,
-        .fname = fname,
-        .params = params,
-        .localvars = localvars,
-        .body = body});
+    Node *r = make_ast(AST_FUNC);
+    r->ty = ty;
+    r->fname = fname;
+    r->params = params;
+    r->localvars = localvars;
+    r->body = body;
+    return r;
 }
 
 static Node *ast_decl(Node *var, Vector *init) {
-    return make_ast(&(Node){ AST_DECL, .declvar = var, .declinit = init });
+    Node *r = make_ast(AST_DECL);
+    r->declvar = var;
+    r->declinit = init;
+    return r;
 }
 
 static Node *ast_init(Node *val, Type *totype, int off) {
-    return make_ast(&(Node){ AST_INIT, .initval = val, .initoff = off, .totype = totype });
+    Node *r = make_ast(AST_INIT);
+    r->initval = val;
+    r->initoff = off;
+    r->totype = totype;
+    return r;
 }
 
 static Node *ast_conv(Type *totype, Node *val) {
-    return make_ast(&(Node){ AST_CONV, totype, .operand = val });
+    Node *r = make_ast(AST_CONV);
+    r->ty = totype;
+    r->operand = val;
+    return r;
 }
 
 static Node *ast_if(Node *cond, Node *then, Node *els) {
-    return make_ast(&(Node){ AST_IF, .cond = cond, .then = then, .els = els });
+    Node *r = make_ast(AST_IF);
+    r->cond = cond;
+    r->then = then;
+    r->els = els;
+    return r;
 }
 
 static Node *ast_ternary(Type *ty, Node *cond, Node *then, Node *els) {
-    return make_ast(&(Node){ AST_TERNARY, ty, .cond = cond, .then = then, .els = els });
+    Node *r = make_ast(AST_TERNARY);
+    r->ty = ty;
+    r->cond = cond;
+    r->then = then;
+    r->els = els;
+    return r;
 }
 
 static Node *ast_return(Node *retval) {
-    return make_ast(&(Node){ AST_RETURN, .retval = retval });
+    Node *r = make_ast(AST_RETURN);
+    r->retval = retval;
+    return r;
 }
 
 static Node *ast_compound_stmt(Vector *stmts) {
-    return make_ast(&(Node){ AST_COMPOUND_STMT, .stmts = stmts });
+    Node *r = make_ast(AST_COMPOUND_STMT);
+    r->stmts = stmts;
+    return r;
 }
 
-static Node *ast_struct_ref(Type *ty, Node *struc, char *name) {
-    return make_ast(&(Node){ AST_STRUCT_REF, ty, .struc = struc, .field = name });
+static Node *ast_struct_ref(Type *ty, Node *struc, char *field) {
+    Node *r = make_ast(AST_STRUCT_REF);
+    r->ty = ty;
+    r->struc = struc;
+    r->field = field;
+    return r;
 }
 
 static Node *ast_goto(char *label) {
-    return make_ast(&(Node){ AST_GOTO, .label = label });
+    Node *r = make_ast(AST_GOTO);
+    r->label = label;
+    return r;
 }
 
 static Node *ast_jump(char *label) {
-    return make_ast(&(Node){ AST_GOTO, .label = label, .newlabel = label });
+    Node *r = make_ast(AST_GOTO);
+    r->label = label;
+    r->newlabel = label;
+    return r;
 }
 
 static Node *ast_computed_goto(Node *expr) {
-    return make_ast(&(Node){ AST_COMPUTED_GOTO, .operand = expr });
+    Node *r = make_ast(AST_COMPUTED_GOTO);
+    r->operand = expr;
+    return r;
 }
 
 static Node *ast_label(char *label) {
-    return make_ast(&(Node){ AST_LABEL, .label = label });
+    Node *r = make_ast(AST_LABEL);
+    r->label = label;
+    return r;
 }
 
 static Node *ast_dest(char *label) {
-    return make_ast(&(Node){ AST_LABEL, .label = label, .newlabel = label });
+    Node *r = make_ast(AST_LABEL);
+    r->label = label;
+    r->newlabel = label;
+    return r;
 }
 
 static Node *ast_label_addr(char *label) {
-    return make_ast(&(Node){ OP_LABEL_ADDR, make_ptr_type(type_void), .label = label });
+    Node *r = make_ast(OP_LABEL_ADDR);
+    r->ty = make_ptr_type(type_void);
+    r->label = label;
+    return r;
 }
 
 static Type *make_type(Type *tmpl) {
