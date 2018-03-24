@@ -666,7 +666,7 @@ static char *join_paths(Vector *args) {
     return buf_body(b);
 }
 
-static char *read_cpp_header_name(Token *hash, bool *std) {
+static const char *read_cpp_header_name(Token *hash, bool *std) {
     // Try reading a filename using a special tokenizer for #include.
     char *path = read_header_file_name(std);
     if (path)
@@ -727,7 +727,7 @@ static bool try_include(char *dir, char *filename, bool isimport) {
 
 static void read_include(Token *hash, File *file, bool isimport) {
     bool std;
-    char *filename = read_cpp_header_name(hash, &std);
+    const char *filename = read_cpp_header_name(hash, &std);
     expect_newline();
     if (filename[0] == '/') {
         if (try_include("/", filename, isimport))
@@ -752,7 +752,7 @@ static void read_include_next(Token *hash, File *file) {
     // header file without getting into infinite inclusion loop.
     // This directive doesn't distinguish <> and "".
     bool std;
-    char *filename = read_cpp_header_name(hash, &std);
+    const char *filename = read_cpp_header_name(hash, &std);
     expect_newline();
     if (filename[0] == '/') {
         if (try_include("/", filename, false))

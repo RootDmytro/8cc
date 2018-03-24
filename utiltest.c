@@ -1,8 +1,9 @@
 // Copyright 2012 Rui Ueyama. Released under the MIT license.
 
-#include <string.h>
-#include "8cc.h"
+#include "error.h"
 #include "srcstream.h"
+#include "8cc.h"
+#include <string.h>
 
 char *get_base_file(void) { return NULL; }
 

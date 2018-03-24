@@ -1059,7 +1059,7 @@ static Node *read_primary_expr() {
     case TNUMBER:
         return read_number(tok);
     case TCHAR:
-        return ast_inttype(char_type(tok_enc), tok_c(tok));
+        return ast_inttype(char_type(tok_enc(tok)), tok_c(tok));
     case TSTRING:
         return ast_string(tok_enc(tok), tok_sval(tok), tok_slen(tok));
     case TKEYWORD:
@@ -1934,7 +1934,7 @@ static Vector *read_decl_init(Type *ty) {
  * of a function or an array.
  */
 
-static Type *read_func_param(char **name, bool optional) {
+static Type *read_func_param(const char **name, bool optional) {
     int sclass = 0;
     Type *basety = type_int;
     if (is_type(peek())) {
@@ -1967,7 +1967,7 @@ static void read_declarator_params(Vector *types, Vector *vars, bool *ellipsis) 
             *ellipsis = true;
             return;
         }
-        char *name;
+        const char *name;
         Type *ty = read_func_param(&name, typeonly);
         ensure_not_void(ty);
         vec_push(types, ty);
@@ -2290,7 +2290,7 @@ static void read_decl(Vector *block, bool isglobal) {
     if (next_token(';'))
         return;
     for (;;) {
-        char *name = NULL;
+        const char *name = NULL;
         Type *ty = read_declarator(&name, copy_incomplete_type(basetype), NULL, DECL_BODY);
         ty->isstatic = (sclass == S_STATIC);
         if (sclass == S_TYPEDEF) {
@@ -2453,7 +2453,7 @@ static Node *read_funcdef() {
     localenv = map_new_parent(globalenv);
     gotos = vec_new();
     labels = map_new();
-    char *name;
+    const char *name;
     Vector *params = vec_new();
     Type *functype = read_declarator(&name, basetype, params, DECL_BODY);
     if (functype->oldstyle) {

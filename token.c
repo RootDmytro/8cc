@@ -34,7 +34,7 @@ typedef struct Token {
             int enc;
             union {
                 struct {
-                    char *sval;
+                    const char *sval;
                     int slen;
                 };
                 int c;
