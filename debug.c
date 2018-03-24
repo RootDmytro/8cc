@@ -1,5 +1,6 @@
 // Copyright 2012 Rui Ueyama. Released under the MIT license.
 
+#include "error.h"
 #include "8cc.h"
 
 static char *decorate_int(char *name, Type *ty) {
@@ -279,34 +280,35 @@ static char *encoding_prefix(int enc) {
 }
 
 char *tok2s(Token *tok) {
-    if (!tok)
+    if (tok == NULL)
         return "(null)";
-    switch (tok->kind) {
+
+    switch (tok_kind(tok)) {
     case TIDENT:
-        return tok->sval;
+        return tok_sval(tok);
     case TKEYWORD:
-        switch (tok->id) {
+        switch (tok_id(tok)) {
 #define op(id, str)         case id: return str;
 #define keyword(id, str, _) case id: return str;
 #include "keyword.inc"
 #undef keyword
 #undef op
-        default: return format("%c", tok->id);
+        default: return format("%c", tok_id(tok));
         }
     case TCHAR:
         return format("%s'%s'",
-                      encoding_prefix(tok->enc),
-                      escape_char(tok->c));
+                      encoding_prefix(tok_enc(tok)),
+                      escape_char(tok_c(tok)));
     case TNUMBER:
-        return tok->sval;
+        return tok_sval(tok);
     case TSTRING:
         return format("%s\"%s\"",
-                      encoding_prefix(tok->enc),
-                      quote_cstring(tok->sval));
+                      encoding_prefix(tok_enc(tok)),
+                      quote_cstring(tok_sval(tok)));
     case TEOF:
         return "(eof)";
     case TINVALID:
-        return format("%c", tok->c);
+        return format("%c", tok_c(tok));
     case TNEWLINE:
         return "(newline)";
     case TSPACE:
@@ -314,5 +316,5 @@ char *tok2s(Token *tok) {
     case TMACRO_PARAM:
         return "(macro-param)";
     }
-    error("internal error: unknown token kind: %d", tok->kind);
+    error("internal error: unknown token kind: %d", tok_kind(tok));
 }

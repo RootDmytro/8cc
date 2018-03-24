@@ -24,9 +24,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "8cc.h"
+#include "error.h"
 #include "file.h"
 #include "str.h"
+#include "8cc.h"
 
 
 typedef struct File_vtbl {

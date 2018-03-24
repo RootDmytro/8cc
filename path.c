@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <string.h>
 #include <unistd.h>
+#include "error.h"
 #include "8cc.h"
 
 #warning argument is modified while result is escaping, likely memory leak

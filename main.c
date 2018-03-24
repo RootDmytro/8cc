@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "cpp.h"
+#include "error.h"
 #include "8cc.h"
 
 static char *infile;
@@ -152,14 +154,18 @@ char *get_base_file() {
 static void preprocess() {
     for (;;) {
         Token *tok = read_token();
-        if (tok->kind == TEOF)
+        if (tok_kind(tok) == TEOF)
             break;
-        if (tok->bol)
+
+        if (tok_bol(tok))
             printf("\n");
-        if (tok->space)
+
+        if (tok_space(tok))
             printf(" ");
+
         printf("%s", tok2s(tok));
     }
+
     printf("\n");
     exit(0);
 }
@@ -169,6 +175,7 @@ int main(int argc, char * const *argv) {
     if (atexit(delete_temp_files))
         perror("atexit");
     parseopt(argc, argv);
+
     lex_init(infile);
     cpp_init();
     parse_init();

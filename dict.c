@@ -29,11 +29,11 @@ Dict *dict_new(void) {
     return dict_init(dict_alloc());
 }
 
-void *dict_get(Dict *dict, char *key) {
+void *dict_get(Dict *dict, const char *key) {
     return map_get(dict->map, key);
 }
 
-void dict_put(Dict *dict, char *key, void *val) {
+void dict_put(Dict *dict, const char *key, void *val) {
     map_put(dict->map, key, val);
     vec_push(dict->key, key);
 }

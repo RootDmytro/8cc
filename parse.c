@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include "error.h"
 #include "8cc.h"
 
 // The largest alignment requirement on x86-64. When we are allocating memory
@@ -72,7 +73,7 @@ static bool is_type(Token *tok);
 static Node *read_unary_expr(void);
 static void read_decl(Vector *toplevel, bool isglobal);
 static Type *read_declarator_tail(Type *basetype, Vector *params);
-static Type *read_declarator(char **name, Type *basetype, Vector *params, int ctx);
+static Type *read_declarator(const char **name, Type *basetype, Vector *params, int ctx);
 static Type *read_abstract_declarator(Type *basetype);
 static Type *read_decl_spec(int *sclass);
 static Node *read_struct_field(Node *struc);
@@ -115,7 +116,7 @@ enum {
 
 static void mark_location() {
     Token *tok = peek();
-    SourceLoc *newLoc = srcloc_new(file_name(tok->file), tok->line);
+    SourceLoc *newLoc = srcloc_new(file_name(tok_file(tok)), pos_line(tok_pos(tok)));
     srcloc_assign(&source_loc, newLoc);
 }
 
@@ -521,7 +522,7 @@ static void ensure_not_void(Type *ty) {
 
 static void expect(char id) {
     Token *tok = get();
-    if (!is_keyword(tok, id))
+    if (!tok_is_keyword(tok, id))
         errort(tok, "'%c' expected, but got %s", id, tok2s(tok));
 }
 
@@ -536,11 +537,11 @@ static Type *get_typedef(char *name) {
 }
 
 static bool is_type(Token *tok) {
-    if (tok->kind == TIDENT)
-        return get_typedef(tok->sval);
-    if (tok->kind != TKEYWORD)
+    if (tok_kind(tok) == TIDENT)
+        return get_typedef(tok_sval(tok));
+    if (tok_kind(tok) != TKEYWORD)
         return false;
-    switch (tok->id) {
+    switch (tok_id(tok)) {
 #define op(x, y)
 #define keyword(id, _, istype) case id: return istype;
 #include "keyword.inc"
@@ -553,7 +554,7 @@ static bool is_type(Token *tok) {
 
 static bool next_token(int kind) {
     Token *tok = get();
-    if (is_keyword(tok, kind))
+    if (tok_is_keyword(tok, kind))
         return true;
     unget_token(tok);
     return false;
@@ -781,7 +782,7 @@ static Type *read_int_suffix(char *s) {
 }
 
 static Node *read_int(Token *tok) {
-    char *s = tok->sval;
+    const char *s = tok_sval(tok);
     char *end;
     long v = !strncasecmp(s, "0b", 2)
         ? strtoul(s + 2, &end, 2) : strtoul(s, &end, 0);
@@ -807,7 +808,7 @@ static Node *read_int(Token *tok) {
 }
 
 static Node *read_float(Token *tok) {
-    char *s = tok->sval;
+    const char *s = tok_sval(tok);
     char *end;
     double v = strtod(s, &end);
     // C11 6.4.4.2p4: The default type for flonum is double.
@@ -821,7 +822,7 @@ static Node *read_float(Token *tok) {
 }
 
 static Node *read_number(Token *tok) {
-    char *s = tok->sval;
+    const char *s = tok_sval(tok);
     bool isfloat = strpbrk(s, ".pP") || (strncasecmp(s, "0x", 2) && strpbrk(s, "eE"));
     return isfloat ? read_float(tok) : read_int(tok);
 }
@@ -832,7 +833,7 @@ static Node *read_number(Token *tok) {
 
 static Type *read_sizeof_operand_sub() {
     Token *tok = get();
-    if (is_keyword(tok, '(') && is_type(peek())) {
+    if (tok_is_keyword(tok, '(') && is_type(peek())) {
         Type *r = read_cast_type();
         expect(')');
         return r;
@@ -883,8 +884,8 @@ static Vector *read_func_args(Vector *params) {
             arg = ast_conv(paramtype, arg);
         vec_push(args, arg);
         Token *tok = get();
-        if (is_keyword(tok, ')')) break;
-        if (!is_keyword(tok, ','))
+        if (tok_is_keyword(tok, ')')) break;
+        if (!tok_is_keyword(tok, ','))
             errort(tok, "unexpected token: '%s'", tok2s(tok));
     }
     return args;
@@ -965,12 +966,12 @@ static void read_static_assert() {
     int val = read_intexpr();
     expect(',');
     Token *tok = get();
-    if (tok->kind != TSTRING)
+    if (tok_kind(tok) != TSTRING)
         errort(tok, "string expected as the second argument for _Static_assert, but got %s", tok2s(tok));
     expect(')');
     expect(';');
     if (!val)
-        errort(tok, "_Static_assert failure: %s", tok->sval);
+        errort(tok, "_Static_assert failure: %s", tok_sval(tok));
 }
 
 /*
@@ -981,7 +982,7 @@ static Node *read_var_or_func(char *name) {
     Node *v = map_get(env(), name);
     if (!v) {
         Token *tok = peek();
-        if (!is_keyword(tok, '('))
+        if (!tok_is_keyword(tok, '('))
             errort(tok, "undefined variable: %s", name);
         Type *ty = make_func_type(type_int, vec_new(), true, false);
         warnt(tok, "assume returning int: %s()", name);
@@ -993,9 +994,9 @@ static Node *read_var_or_func(char *name) {
 }
 
 static int get_compound_assign_op(Token *tok) {
-    if (tok->kind != TKEYWORD)
+    if (tok_kind(tok) != TKEYWORD)
         return 0;
-    switch (tok->id) {
+    switch (tok_id(tok)) {
     case OP_A_ADD: return '+';
     case OP_A_SUB: return '-';
     case OP_A_MUL: return '*';
@@ -1040,30 +1041,32 @@ static Type *char_type(int enc) {
 static Node *read_primary_expr() {
     Token *tok = get();
     if (!tok) return NULL;
-    if (is_keyword(tok, '(')) {
+    if (tok_is_keyword(tok, '(')) {
         if (next_token('{'))
             return read_stmt_expr();
         Node *r = read_expr();
         expect(')');
         return r;
     }
-    if (is_keyword(tok, KGENERIC)) {
+
+    if (tok_is_keyword(tok, KGENERIC)) {
         return read_generic();
     }
-    switch (tok->kind) {
+
+    switch (tok_kind(tok)) {
     case TIDENT:
-        return read_var_or_func(tok->sval);
+        return read_var_or_func(tok_sval(tok));
     case TNUMBER:
         return read_number(tok);
     case TCHAR:
-        return ast_inttype(char_type(tok->enc), tok->c);
+        return ast_inttype(char_type(tok_enc), tok_c(tok));
     case TSTRING:
-        return ast_string(tok->enc, tok->sval, tok->slen);
+        return ast_string(tok_enc(tok), tok_sval(tok), tok_slen(tok));
     case TKEYWORD:
         unget_token(tok);
         return NULL;
     default:
-        error("internal error: unknown token kind: %d", tok->kind);
+        error("internal error: unknown token kind: %d", tok_kind(tok));
     }
 }
 
@@ -1108,7 +1111,7 @@ static Node *read_postfix_expr_tail(Node *node) {
         Token *tok = peek();
         if (next_token(OP_INC) || next_token(OP_DEC)) {
             ensure_lvalue(node);
-            int op = is_keyword(tok, OP_INC) ? OP_POST_INC : OP_POST_DEC;
+            int op = tok_is_keyword(tok, OP_INC) ? OP_POST_INC : OP_POST_DEC;
             return ast_uop(op, node->ty, node);
         }
         return node;
@@ -1131,9 +1134,9 @@ static Node *read_label_addr(Token *tok) {
     // [GNU] Labels as values. You can get the address of the a label
     // with unary "&&" operator followed by a label name.
     Token *tok2 = get();
-    if (tok2->kind != TIDENT)
+    if (tok_kind(tok2) != TIDENT)
         errort(tok, "label name expected after &&, but got %s", tok2s(tok2));
-    Node *r = ast_label_addr(tok2->sval);
+    Node *r = ast_label_addr(tok_sval(tok2));
     vec_push(gotos, r);
     return r;
 }
@@ -1179,8 +1182,8 @@ static Node *read_unary_lognot() {
 
 static Node *read_unary_expr() {
     Token *tok = get();
-    if (tok->kind == TKEYWORD) {
-        switch (tok->id) {
+    if (tok_kind(tok) == TKEYWORD) {
+        switch (tok_id(tok)) {
         case KSIZEOF: return read_sizeof_operand();
         case KALIGNOF: return read_alignof_operand();
         case OP_INC: return read_unary_incdec(OP_PRE_INC);
@@ -1212,10 +1215,10 @@ static Type *read_cast_type() {
 
 static Node *read_cast_expr() {
     Token *tok = get();
-    if (is_keyword(tok, '(') && is_type(peek())) {
+    if (tok_is_keyword(tok, '(') && is_type(peek())) {
         Type *ty = read_cast_type();
         expect(')');
-        if (is_keyword(peek(), '{')) {
+        if (tok_is_keyword(peek(), '{')) {
             Node *node = read_compound_literal(ty);
             return read_postfix_expr_tail(node);
         }
@@ -1351,12 +1354,12 @@ static Node *read_assignment_expr() {
     Token *tok = get();
     if (!tok)
         return node;
-    if (is_keyword(tok, '?'))
+    if (tok_is_keyword(tok, '?'))
         return do_read_conditional_expr(node);
     int cop = get_compound_assign_op(tok);
-    if (is_keyword(tok, '=') || cop) {
+    if (tok_is_keyword(tok, '=') || cop) {
         Node *value = conv(read_assignment_expr());
-        if (is_keyword(tok, '=') || cop)
+        if (tok_is_keyword(tok, '=') || cop)
             ensure_lvalue(node);
         Node *right = cop ? binop(cop, conv(node), value) : value;
         if (is_arithtype(node->ty) && node->ty->kind != right->ty->kind)
@@ -1395,19 +1398,22 @@ static Node *read_expr_opt() {
 static Node *read_struct_field(Node *struc) {
     if (struc->ty->kind != KIND_STRUCT)
         error("struct expected, but got %s", node2s(struc));
+
     Token *name = get();
-    if (name->kind != TIDENT)
+    if (tok_kind(name) != TIDENT)
         error("field name expected, but got %s", tok2s(name));
-    Type *field = dict_get(struc->ty->fields, name->sval);
+
+    Type *field = dict_get(struc->ty->fields, tok_sval(name));
     if (!field)
         error("struct has no such field: %s", tok2s(name));
-    return ast_struct_ref(field, struc, name->sval);
+
+    return ast_struct_ref(field, struc, tok_sval(name));
 }
 
-static char *read_rectype_tag() {
+static const char *read_rectype_tag() {
     Token *tok = get();
-    if (tok->kind == TIDENT)
-        return tok->sval;
+    if (tok_kind(tok) == TIDENT)
+        return tok_sval(tok);
     unget_token(tok);
     return NULL;
 }
@@ -1441,34 +1447,43 @@ static int read_bitsize(char *name, Type *ty) {
 
 static Vector *read_rectype_fields_sub() {
     Vector *r = vec_new();
+
     for (;;) {
         if (next_token(KSTATIC_ASSERT)) {
             read_static_assert();
             continue;
         }
+
         if (!is_type(peek()))
             break;
+
         Type *basetype = read_decl_spec(NULL);
+
         if (basetype->kind == KIND_STRUCT && next_token(';')) {
             vec_push(r, make_pair(NULL, basetype));
             continue;
         }
+
         for (;;) {
-            char *name = NULL;
+            const char *name = NULL;
             Type *fieldtype = read_declarator(&name, basetype, NULL, DECL_PARAM_TYPEONLY);
             ensure_not_void(fieldtype);
             fieldtype = copy_type(fieldtype);
             fieldtype->bitsize = next_token(':') ? read_bitsize(name, fieldtype) : -1;
             vec_push(r, make_pair(name, fieldtype));
+
             if (next_token(','))
                 continue;
-            if (is_keyword(peek(), '}'))
+
+            if (tok_is_keyword(peek(), '}'))
                 warnt(peek(), "missing ';' at the end of field list");
             else
                 expect(';');
+
             break;
         }
     }
+
     expect('}');
     return r;
 }
@@ -1478,8 +1493,10 @@ static void fix_rectype_flexible_member(Vector *fields) {
         void **pair = vec_get(fields, i);
         char *name = pair[0];
         Type *ty = pair[1];
+
         if (ty->kind != KIND_ARRAY)
             continue;
+
         if (ty->len == -1) {
             if (i != vec_len(fields) - 1)
                 error("flexible member may only appear as the last member: %s %s", ty2s(ty), name);
@@ -1587,7 +1604,7 @@ static Dict *read_rectype_fields(int *rsize, int *align, bool is_struct) {
 }
 
 static Type *read_rectype_def(bool is_struct) {
-    char *tag = read_rectype_tag();
+    const char *tag = read_rectype_tag();
     Type *r;
     if (tag) {
         r = map_get(tags, tag);
@@ -1623,13 +1640,13 @@ static Type *read_union_def() {
  */
 
 static Type *read_enum_def() {
-    char *tag = NULL;
+    const char *tag = NULL;
     Token *tok = get();
 
     // Enum is handled as a synonym for int. We only check if the enum
     // is declared.
-    if (tok->kind == TIDENT) {
-        tag = tok->sval;
+    if (tok_kind(tok) == TIDENT) {
+        tag = tok_sval(tok);
         tok = get();
     }
     if (tag) {
@@ -1637,7 +1654,7 @@ static Type *read_enum_def() {
         if (ty && ty->kind != KIND_ENUM)
             errort(tok, "declarations of %s does not match", tag);
     }
-    if (!is_keyword(tok, '{')) {
+    if (!tok_is_keyword(tok, '{')) {
         if (!tag || !map_get(tags, tag))
             errort(tok, "enum tag %s is not defined", tag);
         unget_token(tok);
@@ -1649,11 +1666,11 @@ static Type *read_enum_def() {
     int val = 0;
     for (;;) {
         tok = get();
-        if (is_keyword(tok, '}'))
+        if (tok_is_keyword(tok, '}'))
             break;
-        if (tok->kind != TIDENT)
+        if (tok_kind(tok) != TIDENT)
             errort(tok, "identifier expected, but got %s", tok2s(tok));
-        char *name = tok->sval;
+        const char *name = tok_sval(tok);
 
         if (next_token('='))
             val = read_intexpr();
@@ -1739,46 +1756,58 @@ static void read_struct_initializer_sub(Vector *inits, Type *ty, int off, bool d
     int i = 0;
     for (;;) {
         Token *tok = get();
-        if (is_keyword(tok, '}')) {
+        if (tok_is_keyword(tok, '}')) {
             if (!has_brace)
                 unget_token(tok);
             return;
         }
-        char *fieldname;
+
+        const char *fieldname;
         Type *fieldtype;
-        if ((is_keyword(tok, '.') || is_keyword(tok, '[')) && !has_brace && !designated) {
+        if ((tok_is_keyword(tok, '.') || tok_is_keyword(tok, '[')) && !has_brace && !designated) {
             unget_token(tok);
             return;
         }
-        if (is_keyword(tok, '.')) {
+
+        if (tok_is_keyword(tok, '.')) {
             tok = get();
-            if (!tok || tok->kind != TIDENT)
+
+            if (!tok || tok_kind(tok) != TIDENT)
                 errort(tok, "malformed desginated initializer: %s", tok2s(tok));
-            fieldname = tok->sval;
+
+            fieldname = tok_sval(tok);
             fieldtype = dict_get(ty->fields, fieldname);
+
             if (!fieldtype)
                 errort(tok, "field does not exist: %s", tok2s(tok));
+
             keys = dict_keys(ty->fields);
+
             i = 0;
             while (i < vec_len(keys)) {
                 char *s = vec_get(keys, i++);
                 if (strcmp(fieldname, s) == 0)
                     break;
             }
+
             designated = true;
         } else {
             unget_token(tok);
+
             if (i == vec_len(keys))
                 break;
+
             fieldname = vec_get(keys, i++);
             fieldtype = dict_get(ty->fields, fieldname);
         }
         read_initializer_elem(inits, fieldtype, off + fieldtype->offset, designated);
         maybe_skip_comma();
         designated = false;
+
         if (!ty->is_struct)
             break;
     }
+
     if (has_brace)
         skip_to_brace();
 }
@@ -1792,35 +1821,43 @@ static void read_array_initializer_sub(Vector *inits, Type *ty, int off, bool de
     bool has_brace = maybe_read_brace();
     bool flexible = (ty->len <= 0);
     int elemsize = ty->ptr->size;
+
     int i;
     for (i = 0; flexible || i < ty->len; i++) {
         Token *tok = get();
-        if (is_keyword(tok, '}')) {
+        if (tok_is_keyword(tok, '}')) {
             if (!has_brace)
                 unget_token(tok);
             goto finish;
         }
-        if ((is_keyword(tok, '.') || is_keyword(tok, '[')) && !has_brace && !designated) {
+
+        if ((tok_is_keyword(tok, '.') || tok_is_keyword(tok, '[')) && !has_brace && !designated) {
             unget_token(tok);
             return;
         }
-        if (is_keyword(tok, '[')) {
+
+        if (tok_is_keyword(tok, '[')) {
             Token *tok = peek();
+
             int idx = read_intexpr();
             if (idx < 0 || (!flexible && ty->len <= idx))
                 errort(tok, "array designator exceeds array bounds: %d", idx);
+
             i = idx;
             expect(']');
             designated = true;
         } else {
             unget_token(tok);
         }
+
         read_initializer_elem(inits, ty->ptr, off + elemsize * i, designated);
         maybe_skip_comma();
         designated = false;
     }
+
     if (has_brace)
         skip_to_brace();
+
  finish:
     if (ty->len < 0) {
         ty->len = i;
@@ -1835,19 +1872,23 @@ static void read_array_initializer(Vector *inits, Type *ty, int off, bool design
 
 static void read_initializer_list(Vector *inits, Type *ty, int off, bool designated) {
     Token *tok = get();
+
     if (is_string(ty)) {
-        if (tok->kind == TSTRING) {
-            assign_string(inits, ty, tok->sval, off);
+        if (tok_kind(tok) == TSTRING) {
+            assign_string(inits, ty, tok_sval(tok), off);
             return;
         }
-        if (is_keyword(tok, '{') && peek()->kind == TSTRING) {
+
+        if (tok_is_keyword(tok, '{') && tok_kind(peek()) == TSTRING) {
             tok = get();
-            assign_string(inits, ty, tok->sval, off);
+            assign_string(inits, ty, tok_sval(tok), off);
             expect('}');
             return;
         }
     }
+
     unget_token(tok);
+
     if (ty->kind == KIND_ARRAY) {
         read_array_initializer(inits, ty, off, designated);
     } else if (ty->kind == KIND_STRUCT) {
@@ -1860,12 +1901,15 @@ static void read_initializer_list(Vector *inits, Type *ty, int off, bool designa
 
 static Vector *read_decl_init(Type *ty) {
     Vector *r = vec_new();
-    if (is_keyword(peek(), '{') || is_string(ty)) {
+
+    if (tok_is_keyword(peek(), '{') || is_string(ty)) {
         read_initializer_list(r, ty, 0, false);
     } else {
         Node *init = conv(read_assignment_expr());
+
         if (is_arithtype(init->ty) && init->ty->kind != ty->kind)
             init = ast_conv(ty, init);
+
         vec_push(r, ast_init(init, ty, 0));
     }
     return r;
@@ -1930,9 +1974,9 @@ static void read_declarator_params(Vector *types, Vector *vars, bool *ellipsis) 
         if (!typeonly)
             vec_push(vars, ast_lvar(ty, name));
         tok = get();
-        if (is_keyword(tok, ')'))
+        if (tok_is_keyword(tok, ')'))
             return;
-        if (!is_keyword(tok, ','))
+        if (!tok_is_keyword(tok, ','))
             errort(tok, "comma expected, but got %s", tok2s(tok));
     }
 }
@@ -1941,9 +1985,9 @@ static void read_declarator_params(Vector *types, Vector *vars, bool *ellipsis) 
 static void read_declarator_params_oldstyle(Vector *vars) {
     for (;;) {
         Token *tok = get();
-        if (tok->kind != TIDENT)
+        if (tok_kind(tok) != TIDENT)
             errort(tok, "identifier expected, but got %s", tok2s(tok));
-        vec_push(vars, ast_lvar(type_int, tok->sval));
+        vec_push(vars, ast_lvar(type_int, tok_sval(tok)));
         if (next_token(')'))
             return;
         if (!next_token(','))
@@ -1955,14 +1999,14 @@ static Type *read_func_param_list(Vector *paramvars, Type *rettype) {
     // C11 6.7.6.3p10: A parameter list with just "void" specifies that
     // the function has no parameters.
     Token *tok = get();
-    if (is_keyword(tok, KVOID) && next_token(')'))
+    if (tok_is_keyword(tok, KVOID) && next_token(')'))
         return make_func_type(rettype, vec_new(), false, false);
 
     // C11 6.7.6.3p14: K&R-style un-prototyped declaration or
     // function definition having no parameters.
     // We return a type representing K&R-style declaration here.
     // If this is actually part of a declartion, the type will be fixed later.
-    if (is_keyword(tok, ')'))
+    if (tok_is_keyword(tok, ')'))
         return make_func_type(rettype, vec_new(), true, true);
     unget_token(tok);
 
@@ -2020,7 +2064,7 @@ static void skip_type_qualifiers() {
 }
 
 // C11 6.7.6: Declarators
-static Type *read_declarator(char **rname, Type *basety, Vector *params, int ctx) {
+static Type *read_declarator(const char **rname, Type *basety, Vector *params, int ctx) {
     if (next_token('(')) {
         // '(' is either beginning of grouping parentheses or of a function parameter list.
         // If the next token is a type name, a parameter list must follow.
@@ -2043,10 +2087,10 @@ static Type *read_declarator(char **rname, Type *basety, Vector *params, int ctx
         return read_declarator(rname, make_ptr_type(basety), params, ctx);
     }
     Token *tok = get();
-    if (tok->kind == TIDENT) {
+    if (tok_kind(tok) == TIDENT) {
         if (ctx == DECL_CAST)
             errort(tok, "identifier is not expected, but got %s", tok2s(tok));
-        *rname = tok->sval;
+        *rname = tok_sval(tok);
         return read_declarator_tail(basety, params);
     }
     if (ctx == DECL_BODY || ctx == DECL_PARAM)
@@ -2112,21 +2156,21 @@ static Type *read_decl_spec(int *rsclass) {
 
     for (;;) {
         tok = get();
-        if (tok->kind == EOF)
+        if (tok_kind(tok) == EOF)
             error("premature end of input");
-        if (kind == 0 && tok->kind == TIDENT && !usertype) {
-            Type *def = get_typedef(tok->sval);
+        if (kind == 0 && tok_kind(tok) == TIDENT && !usertype) {
+            Type *def = get_typedef(tok_sval(tok));
             if (def) {
                 if (usertype) goto err;
                 usertype = def;
                 goto errcheck;
             }
         }
-        if (tok->kind != TKEYWORD) {
+        if (tok_kind(tok) != TKEYWORD) {
             unget_token(tok);
             break;
         }
-        switch (tok->id) {
+        switch (tok_id(tok)) {
         case KTYPEDEF:  if (sclass) goto err; sclass = S_TYPEDEF; break;
         case KEXTERN:   if (sclass) goto err; sclass = S_EXTERN; break;
         case KSTATIC:   if (sclass) goto err; sclass = S_STATIC; break;
@@ -2279,7 +2323,7 @@ static Vector *read_oldstyle_param_args() {
     localenv = NULL;
     Vector *r = vec_new();
     for (;;) {
-        if (is_keyword(peek(), '{'))
+        if (tok_is_keyword(peek(), '{'))
             break;
         if (!is_type(peek()))
             errort(peek(), "K&R-style declarator expected, but got %s", tok2s(peek()));
@@ -2344,12 +2388,12 @@ static Node *read_func_body(Type *functype, char *fname, Vector *params) {
 static void skip_parentheses(Vector *buf) {
     for (;;) {
         Token *tok = get();
-        if (tok->kind == TEOF)
+        if (tok_kind(tok) == TEOF)
             error("premature end of input");
         vec_push(buf, tok);
-        if (is_keyword(tok, ')'))
+        if (tok_is_keyword(tok, ')'))
             return;
-        if (is_keyword(tok, '('))
+        if (tok_is_keyword(tok, '('))
             skip_parentheses(buf);
     }
 }
@@ -2365,23 +2409,23 @@ static bool is_funcdef() {
     for (;;) {
         Token *tok = get();
         vec_push(buf, tok);
-        if (tok->kind == TEOF)
+        if (tok_kind(tok) == TEOF)
             error("premature end of input");
-        if (is_keyword(tok, ';'))
+        if (tok_is_keyword(tok, ';'))
             break;
         if (is_type(tok))
             continue;
-        if (is_keyword(tok, '(')) {
+        if (tok_is_keyword(tok, '(')) {
             skip_parentheses(buf);
             continue;
         }
-        if (tok->kind != TIDENT)
+        if (tok_kind(tok) != TIDENT)
             continue;
-        if (!is_keyword(peek(), '('))
+        if (!tok_is_keyword(peek(), '('))
             continue;
         vec_push(buf, get());
         skip_parentheses(buf);
-        r = (is_keyword(peek(), '{') || is_type(peek()));
+        r = (tok_is_keyword(peek(), '{') || is_type(peek()));
         break;
     }
     while (vec_len(buf) > 0)
@@ -2538,7 +2582,7 @@ static Node *read_do_stmt() {
     Node *body = read_stmt();
     RESTORE_JUMP_LABELS();
     Token *tok = get();
-    if (!is_keyword(tok, KWHILE))
+    if (!tok_is_keyword(tok, KWHILE))
         errort(tok, "'while' is expected, but got %s", tok2s(tok));
     expect('(');
     Node *cond = read_boolean_expr();
@@ -2692,18 +2736,20 @@ static Node *read_goto_stmt() {
         return ast_computed_goto(expr);
     }
     Token *tok = get();
-    if (!tok || tok->kind != TIDENT)
+    if (!tok || tok_kind(tok) != TIDENT)
         errort(tok, "identifier expected, but got %s", tok2s(tok));
     expect(';');
-    Node *r = ast_goto(tok->sval);
+    Node *r = ast_goto(tok_sval(tok));
     vec_push(gotos, r);
     return r;
 }
 
 static Node *read_label(Token *tok) {
-    char *label = tok->sval;
+    const char *label = tok_sval(tok);
+
     if (map_get(labels, label))
         errort(tok, "duplicate label: %s", tok2s(tok));
+
     Node *r = ast_label(label);
     map_put(labels, label, r);
     return read_label_tail(r);
@@ -2715,8 +2761,8 @@ static Node *read_label(Token *tok) {
 
 static Node *read_stmt() {
     Token *tok = get();
-    if (tok->kind == TKEYWORD) {
-        switch (tok->id) {
+    if (tok_kind(tok) == TKEYWORD) {
+        switch (tok_id(tok)) {
         case '{':       return read_compound_stmt();
         case KIF:       return read_if_stmt();
         case KFOR:      return read_for_stmt();
@@ -2731,7 +2777,7 @@ static Node *read_stmt() {
         case KGOTO:     return read_goto_stmt();
         }
     }
-    if (tok->kind == TIDENT && next_token(':'))
+    if (tok_kind(tok) == TIDENT && next_token(':'))
         return read_label(tok);
     unget_token(tok);
     Node *r = read_expr_opt();
@@ -2754,7 +2800,7 @@ static Node *read_compound_stmt() {
 
 static void read_decl_or_stmt(Vector *list) {
     Token *tok = peek();
-    if (tok->kind == TEOF)
+    if (tok_kind(tok) == TEOF)
         error("premature end of input");
     mark_location();
     if (is_type(tok)) {
@@ -2775,7 +2821,7 @@ static void read_decl_or_stmt(Vector *list) {
 Vector *read_toplevels() {
     toplevels = vec_new();
     for (;;) {
-        if (peek()->kind == TEOF)
+        if (tok_kind(peek()) == TEOF)
             return toplevels;
         if (is_funcdef())
             vec_push(toplevels, read_funcdef());
@@ -2790,29 +2836,29 @@ Vector *read_toplevels() {
 
 // C11 5.1.1.2p6 Adjacent string literal tokens are concatenated.
 static void concatenate_string(Token *tok) {
-    int enc = tok->enc;
+    int enc = tok_enc(tok);
     Buffer *b = buf_new();
-    buf_append(b, tok->sval, tok->slen - 1);
-    while (peek()->kind == TSTRING) {
+    buf_append(b, tok_sval(tok), tok_slen(tok) - 1);
+    while (tok_kind(peek()) == TSTRING) {
         Token *tok2 = read_token();
-        buf_append(b, tok2->sval, tok2->slen - 1);
-        int enc2 = tok2->enc;
+        buf_append(b, tok_sval(tok2), tok_slen(tok2) - 1);
+        int enc2 = tok_enc(tok2);
         if (enc != ENC_NONE && enc2 != ENC_NONE && enc != enc2)
             errort(tok2, "unsupported non-standard concatenation of string literals: %s", tok2s(tok2));
         if (enc == ENC_NONE)
             enc = enc2;
     }
     buf_write(b, '\0');
-    tok->sval = buf_body(b);
-    tok->slen = buf_len(b);
-    tok->enc = enc;
+    tok_set_sval(tok, buf_body(b));
+    tok_set_slen(tok, buf_len(b));
+    tok_set_enc(tok, enc);
 }
 
 static Token *get() {
     Token *r = read_token();
-    if (r->kind == TINVALID)
-        errort(r, "stray character in program: '%c'", r->c);
-    if (r->kind == TSTRING && peek()->kind == TSTRING)
+    if (tok_kind(r) == TINVALID)
+        errort(r, "stray character in program: '%c'", tok_c(r));
+    if (tok_kind(r) == TSTRING && tok_kind(peek()) == TSTRING)
         concatenate_string(r);
     return r;
 }

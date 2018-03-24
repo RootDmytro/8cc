@@ -8,6 +8,7 @@
 // Unprefixed or u8 strings are supposed to be in UTF-8 endcoding.
 // Source files are supposed to be written in UTF-8.
 
+#include "error.h"
 #include "8cc.h"
 
 static int count_leading_ones(char c) {

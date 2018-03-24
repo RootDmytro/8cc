@@ -1,5 +1,8 @@
 // buffer.h
 
+#include <stdarg.h>
+
+
 typedef struct Buffer Buffer;
 
 Buffer *buf_alloc(void);

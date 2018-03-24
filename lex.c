@@ -25,93 +25,68 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include "8cc.h"
 #include "srcstream.h"
+#include "pos.h"
+#include "token.h"
+#include "error.h"
+#include "8cc.h"
 
-static Vector *buffers = EMPTY_VECTOR;
-static Token *space_token = &(Token){ TSPACE };
-static Token *newline_token = &(Token){ TNEWLINE };
-static Token *eof_token = &(Token){ TEOF };
 
-typedef struct {
-    int line;
-    int column;
-} Pos;
+static Vector *buffers = Nil;
+static Token *space_token = Nil;
+static Token *newline_token = Nil;
+static Token *eof_token = Nil;
+
+static Pos get_pos(int delta);
 
 static Pos pos;
+
+Pos lex_current_pos(void) {
+    return pos;
+}
+
+static void lex_mark_pos() {
+    pos = get_pos(0);
+}
 
 static char *pos_string(Pos *p) {
     File *f = current_file();
     return format("%s:%d:%d", f ? str_get(file_name(f)) : "(unknown)", p->line, p->column);
 }
 
-#define errorp(p, ...) errorf(__FILE__ ":" STR(__LINE__), pos_string(&p), __VA_ARGS__)
-#define warnp(p, ...)  warnf(__FILE__ ":" STR(__LINE__), pos_string(&p), __VA_ARGS__)
 
 static void skip_block_comment(void);
 
 void lex_init(char *filename) {
+    buffers = vec_new();
+    space_token = tok_alloc(TSPACE);
+    newline_token = tok_alloc(TNEWLINE);
+    eof_token = tok_alloc(TEOF);
+
     vec_push(buffers, vec_new());
+
     if (!strcmp(filename, "-")) {
         stream_push(file_init(file_alloc(), stdin, str_new("-")));
         return;
     }
+
     FILE *fp = fopen(filename, "r");
     if (!fp)
         error("Cannot open %s: %s", filename, strerror(errno));
+
     stream_push(file_init(file_alloc(), fp, str_new(filename)));
 }
 
 static Pos get_pos(int delta) {
     File *f = current_file();
-    return (Pos){ file_line(f), file_column(f) + delta };
-}
-
-static void mark() {
-    pos = get_pos(0);
-}
-
-static Token *make_token(Token *tmpl) {
-    Token *r = malloc(sizeof(Token));
-    *r = *tmpl;
-    r->hideset = NULL;
-    File *f = current_file();
-    r->file = f;
-    r->line = pos.line;
-    r->column = pos.column;
-    r->count = file_ntok_increment(f);
-    return r;
-}
-
-static Token *make_ident(char *p) {
-    return make_token(&(Token){ TIDENT, .sval = p });
-}
-
-static Token *make_strtok(char *s, int len, int enc) {
-    return make_token(&(Token){ TSTRING, .sval = s, .slen = len, .enc = enc });
-}
-
-static Token *make_keyword(int id) {
-    return make_token(&(Token){ TKEYWORD, .id = id });
-}
-
-static Token *make_number(char *s) {
-    return make_token(&(Token){ TNUMBER, .sval = s });
-}
-
-static Token *make_invalid(char c) {
-    return make_token(&(Token){ TINVALID, .c = c });
-}
-
-static Token *make_char(int c, int enc) {
-    return make_token(&(Token){ TCHAR, .c = c, .enc = enc });
+    return pos_make(file_line(f), file_column(f) + delta);
 }
 
 static bool iswhitespace(int c) {
     return c == ' ' || c == '\t' || c == '\f' || c == '\v';
 }
 
-static int peek() {
+static int peekc() {
     int r = readc();
     unreadc(r);
     return r;
@@ -211,21 +186,25 @@ void skip_cond_incl() {
         int column = file_column(current_file()) - 1;
         Token *tok = lex();
 
-        if (tok->kind != TIDENT)
+        if (tok_kind(tok) != TIDENT)
             continue;
 
-        if (!nest && (is_ident(tok, "else") || is_ident(tok, "elif") || is_ident(tok, "endif"))) {
+        if (!nest && (tok_is_ident(tok, "else") || tok_is_ident(tok, "elif") || tok_is_ident(tok, "endif"))) {
             unget_token(tok);
-            Token *hash = make_keyword('#');
-            hash->bol = true;
-            hash->column = column;
+            Token *hash = tok_new_keyword('#');
+            tok_set_bol(hash, true);
+
+            Pos pos = tok_pos(hash);
+            pos.column = column;
+            tok_set_pos(hash, pos);
+
             unget_token(hash);
             return;
         }
 
-        if (is_ident(tok, "if") || is_ident(tok, "ifdef") || is_ident(tok, "ifndef")) {
+        if (tok_is_ident(tok, "if") || tok_is_ident(tok, "ifdef") || tok_is_ident(tok, "ifndef")) {
             nest++;
-        } else if (nest && is_ident(tok, "endif")) {
+        } else if (nest && tok_is_ident(tok, "endif")) {
             nest--;
         }
 
@@ -245,7 +224,7 @@ static Token *read_number(char c) {
         if (!isdigit(c) && !isalpha(c) && c != '.' && !flonum) {
             unreadc(c);
             buf_write(b, '\0');
-            return make_number(buf_body(b));
+            return tok_new_number(buf_body(b));
         }
         buf_write(b, c);
         last = c;
@@ -253,7 +232,7 @@ static Token *read_number(char c) {
 }
 
 static bool nextoct() {
-    int c = peek();
+    int c = peekc();
     return '0' <= c && c <= '7';
 }
 
@@ -348,12 +327,15 @@ static int read_escaped_char() {
 static Token *read_char(int enc) {
     int c = readc();
     int r = (c == '\\') ? read_escaped_char() : c;
+
     c = readc();
     if (c != '\'')
         errorp(pos, "unterminated char");
+
     if (enc == ENC_NONE)
-        return make_char((char)r, enc);
-    return make_char(r, enc);
+        return tok_new_char((char)r, enc);
+
+    return tok_new_char(r, enc);
 }
 
 // Reads a string literal.
@@ -369,7 +351,7 @@ static Token *read_string(int enc) {
             buf_write(b, c);
             continue;
         }
-        bool isucs = (peek() == 'u' || peek() == 'U');
+        bool isucs = (peekc() == 'u' || peekc() == 'U');
         c = read_escaped_char();
         if (isucs) {
             write_utf8(b, c);
@@ -378,7 +360,7 @@ static Token *read_string(int enc) {
         buf_write(b, c);
     }
     buf_write(b, '\0');
-    return make_strtok(buf_body(b), buf_len(b), enc);
+    return tok_new_strtok(buf_body(b), buf_len(b), enc);
 }
 
 static Token *read_ident(char c) {
@@ -392,13 +374,13 @@ static Token *read_ident(char c) {
         }
         // C11 6.4.2.1: \u or \U characters (universal-character-name)
         // are allowed to be part of identifiers.
-        if (c == '\\' && (peek() == 'u' || peek() == 'U')) {
+        if (c == '\\' && (peekc() == 'u' || peekc() == 'U')) {
             write_utf8(b, read_escaped_char());
             continue;
         }
         unreadc(c);
         buf_write(b, '\0');
-        return make_ident(buf_body(b));
+        return tok_new_ident(buf_body(b));
     }
 }
 
@@ -421,37 +403,37 @@ static void skip_block_comment() {
 // See C11 6.4.6p3 for the spec.
 static Token *read_hash_digraph() {
     if (next('>'))
-        return make_keyword('}');
+        return tok_new_keyword('}');
     if (next(':')) {
         if (next('%')) {
             if (next(':'))
-                return make_keyword(KHASHHASH);
+                return tok_new_keyword(KHASHHASH);
             unreadc('%');
         }
-        return make_keyword('#');
+        return tok_new_keyword('#');
     }
     return NULL;
 }
 
 static Token *read_rep(char expect, int t1, int els) {
-    return make_keyword(next(expect) ? t1 : els);
+    return tok_new_keyword(next(expect) ? t1 : els);
 }
 
 static Token *read_rep2(char expect1, int t1, char expect2, int t2, char els) {
     if (next(expect1))
-        return make_keyword(t1);
-    return make_keyword(next(expect2) ? t2 : els);
+        return tok_new_keyword(t1);
+    return tok_new_keyword(next(expect2) ? t2 : els);
 }
 
 static Token *do_read_token() {
     if (skip_space())
         return space_token;
-    mark();
+    lex_mark_pos();
     int c = readc();
     switch (c) {
     case '\n': return newline_token;
-    case ':': return make_keyword(next('>') ? ']' : ':');
-    case '#': return make_keyword(next('#') ? KHASHHASH : '#');
+    case ':': return tok_new_keyword(next('>') ? ']' : ':');
+    case '#': return tok_new_keyword(next('#') ? KHASHHASH : '#');
     case '+': return read_rep2('+', OP_INC, '=', OP_A_ADD, '+');
     case '*': return read_rep('=', OP_A_MUL, '*');
     case '=': return read_rep('=', OP_EQ, '=');
@@ -461,7 +443,7 @@ static Token *do_read_token() {
     case '^': return read_rep('=', OP_A_XOR, '^');
     case '"': return read_string(ENC_NONE);
     case '\'': return read_char(ENC_NONE);
-    case '/': return make_keyword(next('=') ? OP_A_DIV : '/');
+    case '/': return tok_new_keyword(next('=') ? OP_A_DIV : '/');
     case 'a' ... 't': case 'v' ... 'z': case 'A' ... 'K':
     case 'M' ... 'T': case 'V' ... 'Z': case '_': case '$':
     case 0x80 ... 0xFD:
@@ -486,32 +468,32 @@ static Token *do_read_token() {
         }
         return read_ident(c);
     case '.':
-        if (isdigit(peek()))
+        if (isdigit(peekc()))
             return read_number(c);
         if (next('.')) {
             if (next('.'))
-                return make_keyword(KELLIPSIS);
-            return make_ident("..");
+                return tok_new_keyword(KELLIPSIS);
+            return tok_new_ident("..");
         }
-        return make_keyword('.');
+        return tok_new_keyword('.');
     case '(': case ')': case ',': case ';': case '[': case ']': case '{':
     case '}': case '?': case '~':
-        return make_keyword(c);
+        return tok_new_keyword(c);
     case '-':
-        if (next('-')) return make_keyword(OP_DEC);
-        if (next('>')) return make_keyword(OP_ARROW);
-        if (next('=')) return make_keyword(OP_A_SUB);
-        return make_keyword('-');
+        if (next('-')) return tok_new_keyword(OP_DEC);
+        if (next('>')) return tok_new_keyword(OP_ARROW);
+        if (next('=')) return tok_new_keyword(OP_A_SUB);
+        return tok_new_keyword('-');
     case '<':
         if (next('<')) return read_rep('=', OP_A_SAL, OP_SAL);
-        if (next('=')) return make_keyword(OP_LE);
-        if (next(':')) return make_keyword('[');
-        if (next('%')) return make_keyword('{');
-        return make_keyword('<');
+        if (next('=')) return tok_new_keyword(OP_LE);
+        if (next(':')) return tok_new_keyword('[');
+        if (next('%')) return tok_new_keyword('{');
+        return tok_new_keyword('<');
     case '>':
-        if (next('=')) return make_keyword(OP_GE);
+        if (next('=')) return tok_new_keyword(OP_GE);
         if (next('>')) return read_rep('=', OP_A_SAR, OP_SAR);
-        return make_keyword('>');
+        return tok_new_keyword('>');
     case '%': {
         Token *tok = read_hash_digraph();
         if (tok)
@@ -520,7 +502,7 @@ static Token *do_read_token() {
     }
     case EOF:
         return eof_token;
-    default: return make_invalid(c);
+    default: return tok_new_invalid(c);
     }
 }
 
@@ -542,9 +524,11 @@ static bool buffer_empty() {
 char *read_header_file_name(bool *std) {
     if (!buffer_empty())
         return NULL;
+
     skip_space();
     Pos p = get_pos(0);
     char close;
+
     if (next('"')) {
         *std = false;
         close = '"';
@@ -554,21 +538,21 @@ char *read_header_file_name(bool *std) {
     } else {
         return NULL;
     }
+
     Buffer *b = buf_init(buf_alloc());
+
     while (!next(close)) {
         int c = readc();
         if (c == EOF || c == '\n')
             errorp(p, "premature end of header name");
         buf_write(b, c);
     }
+
     if (buf_len(b) == 0)
         errorp(p, "header name should not be empty");
+
     buf_write(b, '\0');
     return buf_body(b);
-}
-
-bool is_keyword(Token *tok, int c) {
-    return (tok->kind == TKEYWORD) && (tok->id == c);
 }
 
 // Temporarily switches the input token stream to given list of tokens,
@@ -584,7 +568,7 @@ void token_buffer_unstash() {
 }
 
 void unget_token(Token *tok) {
-    if (tok->kind == TEOF)
+    if (tok_kind(tok) == TEOF)
         return;
     Vector *buf = vec_tail(buffers);
     vec_push(buf, tok);
@@ -598,7 +582,7 @@ Token *lex_string(char *s) {
     Token *r = do_read_token();
     next('\n');
     Pos p = get_pos(0);
-    if (peek() != EOF)
+    if (peekc() != EOF)
         errorp(p, "unconsumed input: %s", s);
     stream_unstash();
     return r;
@@ -608,14 +592,19 @@ Token *lex() {
     Vector *buf = vec_tail(buffers);
     if (vec_len(buf) > 0)
         return vec_pop(buf);
+
     if (vec_len(buffers) > 1)
         return eof_token;
+
     bool bol = file_column(current_file()) == 1;
     Token *tok = do_read_token();
-    while (tok->kind == TSPACE) {
+
+    while (tok_kind(tok) == TSPACE) {
         tok = do_read_token();
-        tok->space = true;
+        tok_set_space(tok, true);
     }
-    tok->bol = bol;
+
+    tok_set_bol(tok, bol);
+
     return tok;
 }

@@ -1,9 +1,13 @@
+// error.c
 // Copyright 2012 Rui Ueyama. Released under the MIT license.
 
+#include "error.h"
+#include "buffer.h"
 #include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "8cc.h"
+
 
 bool enable_warning = true;
 bool warning_is_error = false;
@@ -35,10 +39,13 @@ void warnf(char *line, char *pos, char *fmt, ...) {
         exit(1);
 }
 
-char *token_pos(Token *tok) {
-    File *f = tok->file;
+char *tok_position_string(Token *tok) {
+    File *f = tok_file(tok);
     if (!f)
         return "(unknown)";
+
     const char *name = file_name(f) ? str_get(file_name(f)) : "(unknown)";
-    return format("%s:%d:%d", name, tok->line, tok->column);
+
+    Pos pos = tok_pos(tok);
+    return format("%s:%d:%d", name, pos_line(pos), pos_column(pos));
 }

@@ -42,11 +42,11 @@ Set *set_add(Set *s, char *value) {
     return r;
 }
 
-bool set_has(Set *s, char *value) {
+bool set_has(Set *s, const char *value) {
     for (; s; s = s->next)
         if (strcmp(s->value, value) == 0)
             return 1;
-    return 0;
+    return false;
 }
 
 Set *set_union(Set *a, Set *b) {

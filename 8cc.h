@@ -5,10 +5,8 @@
 
 #include <assert.h>
 #include <inttypes.h>
-#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdnoreturn.h>
 #include <time.h>
 #include <stdint.h>
 
@@ -20,57 +18,8 @@
 #include "map.h"
 #include "str.h"
 #include "srcloc.h"
+#include "token.h"
 
-
-enum {
-    TIDENT,
-    TKEYWORD,
-    TNUMBER,
-    TCHAR,
-    TSTRING,
-    TEOF,
-    TINVALID,
-    // Only in CPP
-    MIN_CPP_TOKEN,
-    TNEWLINE,
-    TSPACE,
-    TMACRO_PARAM,
-};
-
-enum {
-    ENC_NONE,
-    ENC_CHAR16,
-    ENC_CHAR32,
-    ENC_UTF8,
-    ENC_WCHAR,
-};
-
-typedef struct {
-    int kind;
-    File *file;
-    int line;
-    int column;
-    bool space;   // true if the token has a leading space
-    bool bol;     // true if the token is at the beginning of a line
-    int count;    // token number in a file, counting from 0.
-    Set *hideset; // used by the preprocessor for macro expansion
-    union {
-        // TKEYWORD
-        int id;
-        // TSTRING or TCHAR
-        struct {
-            char *sval;
-            int slen;
-            int c;
-            int enc;
-        };
-        // TMACRO_PARAM
-        struct {
-            bool is_vararg;
-            int position;
-        };
-    };
-} Token;
 
 enum {
     AST_LITERAL = 256,
@@ -264,11 +213,8 @@ void write_utf8(Buffer *b, uint32_t rune);
 
 // cpp.c
 void read_from_string(char *buf);
-bool is_ident(Token *tok, char *s);
 void expect_newline(void);
 void add_include_path(char *path);
-void init_now(void);
-void cpp_init(void);
 Token *peek_token(void);
 Token *read_token(void);
 
@@ -277,23 +223,11 @@ char *ty2s(Type *ty);
 char *node2s(Node *node);
 char *tok2s(Token *tok);
 
-
 // error.c
 extern bool enable_warning;
 extern bool dumpstack;
 extern bool dumpsource;
 extern bool warning_is_error;
-
-#define STR2(x) #x
-#define STR(x) STR2(x)
-#define error(...)       errorf(__FILE__ ":" STR(__LINE__), NULL, __VA_ARGS__)
-#define errort(tok, ...) errorf(__FILE__ ":" STR(__LINE__), token_pos(tok), __VA_ARGS__)
-#define warn(...)        warnf(__FILE__ ":" STR(__LINE__), NULL, __VA_ARGS__)
-#define warnt(tok, ...)  warnf(__FILE__ ":" STR(__LINE__), token_pos(tok), __VA_ARGS__)
-
-noreturn void errorf(char *line, char *pos, char *fmt, ...);
-void warnf(char *line, char *pos, char *fmt, ...);
-char *token_pos(Token *tok);
 
 // gen.c
 void set_output_file(FILE *fp);
