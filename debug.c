@@ -1,6 +1,9 @@
+// debug.c
 // Copyright 2012 Rui Ueyama. Released under the MIT license.
 
+#include "debug.h"
 #include "error.h"
+#include "node.h"
 #include "8cc.h"
 
 static char *decorate_int(char *name, Type *ty) {
@@ -70,11 +73,11 @@ char *ty2s(Type *ty) {
 }
 
 static void uop_to_string(Buffer *b, char *op, Node *node) {
-    buf_printf(b, "(%s %s)", op, node2s(node->operand));
+    buf_printf(b, "(%s %s)", op, node2s(ast_operand(node)));
 }
 
 static void binop_to_string(Buffer *b, char *op, Node *node) {
-    buf_printf(b, "(%s %s %s)", op, node2s(node->left), node2s(node->right));
+    buf_printf(b, "(%s %s %s)", op, node2s(ast_left(node)), node2s(ast_right(node)));
 }
 
 static void a2s_declinit(Buffer *b, Vector *initlist) {
@@ -91,9 +94,9 @@ static void do_node2s(Buffer *b, Node *node) {
         buf_printf(b, "(nil)");
         return;
     }
-    switch (node->kind) {
+    switch (ast_kind(node)) {
     case AST_LITERAL:
-        switch (node->ty->kind) {
+        switch (ast_ty(node)->kind) {
         case KIND_CHAR:
             if (node->ival == '\n')      buf_printf(b, "'\n'");
             else if (node->ival == '\\') buf_printf(b, "'\\\\'");
@@ -137,7 +140,7 @@ static void do_node2s(Buffer *b, Node *node) {
         break;
     case AST_FUNCALL:
     case AST_FUNCPTR_CALL: {
-        buf_printf(b, "(%s)%s(", ty2s(node->ty),
+        buf_printf(b, "(%s)%s(", ty2s(ast_ty(node)),
                    node->kind == AST_FUNCALL ? node->fname : node2s(node));
         for (int i = 0; i < vec_len(node->args); i++) {
             if (i > 0)
@@ -152,7 +155,7 @@ static void do_node2s(Buffer *b, Node *node) {
         break;
     }
     case AST_FUNC: {
-        buf_printf(b, "(%s)%s(", ty2s(node->ty), node->fname);
+        buf_printf(b, "(%s)%s(", ty2s(ast_ty(node)), node->fname);
         for (int i = 0; i < vec_len(node->params); i++) {
             if (i > 0)
                 buf_printf(b, ",");
@@ -180,7 +183,7 @@ static void do_node2s(Buffer *b, Node *node) {
         buf_printf(b, "%s@%d", node2s(node->initval), node->initoff, ty2s(node->totype));
         break;
     case AST_CONV:
-        buf_printf(b, "(conv %s=>%s)", node2s(node->operand), ty2s(node->ty));
+        buf_printf(b, "(conv %s=>%s)", node2s(ast_operand(node)), ty2s(ast_ty(node)));
         break;
     case AST_IF:
         buf_printf(b, "(if %s %s",
@@ -201,8 +204,8 @@ static void do_node2s(Buffer *b, Node *node) {
         break;
     case AST_COMPOUND_STMT: {
         buf_printf(b, "{");
-        for (int i = 0; i < vec_len(node->stmts); i++) {
-            do_node2s(b, vec_get(node->stmts, i));
+        for (int i = 0; i < vec_len(ast_stmts(node)); i++) {
+            do_node2s(b, vec_get(ast_stmts(node), i));
             buf_printf(b, ";");
         }
         buf_printf(b, "}");
@@ -243,9 +246,9 @@ static void do_node2s(Buffer *b, Node *node) {
     case '|': binop_to_string(b, "|", node); break;
     case OP_CAST: {
         buf_printf(b, "((%s)=>(%s) %s)",
-                   ty2s(node->operand->ty),
-                   ty2s(node->ty),
-                   node2s(node->operand));
+                   ty2s(ast_operand(node)->ty),
+                   ty2s(ast_ty(node)),
+                   node2s(ast_operand(node)));
         break;
     }
     case OP_LABEL_ADDR:

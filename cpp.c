@@ -5,6 +5,11 @@
  * in this document: https://github.com/rui314/8cc/wiki/cpp.algo.pdf
  */
 
+#include "cpp.h"
+#include "error.h"
+#include "srcstream.h"
+#include "node.h"
+#include "8cc.h"
 #include <ctype.h>
 #include <libgen.h>
 #include <locale.h>
@@ -12,9 +17,6 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include "error.h"
-#include "srcstream.h"
-#include "8cc.h"
 
 static Map *macros = Nil;
 static Map *once = Nil;

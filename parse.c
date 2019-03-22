@@ -4,14 +4,19 @@
  * Recursive descendent parser for C.
  */
 
+#include "error.h"
+#include "cpp.h"
+#include "node.h"
+#include "debug.h"
+
+#include "8cc.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "error.h"
-#include "8cc.h"
 
 // The largest alignment requirement on x86-64. When we are allocating memory
 // for an array whose type is unknown, the array will be aligned to this
@@ -152,51 +157,39 @@ static Map *env() {
     return localenv ? localenv : globalenv;
 }
 
-static Node *make_ast(int kind) {
-    Node *r = calloc(1, sizeof(Node));
-
-    // this should be replaced by virtualization
-    r->kind = kind;
-
-    // this should be encapsulated in the setter of sourceLoc
-    srcloc_assign(&r->sourceLoc, source_loc);
-
-    return r;
-}
-
 static Node *ast_uop(int kind, Type *ty, Node *operand) {
-    Node *r = make_ast(kind);
-    r->ty = ty;
-    r->operand = operand;
+    Node *r = ast_new(kind);
+    ast_set_ty(r, ty);
+    ast_set_operand(r, operand);
     return r;
 }
 
 static Node *ast_binop(Type *ty, int kind, Node *left, Node *right) {
-    Node *r = make_ast(kind);
-    r->ty = ty;
-    r->left = left;
-    r->right = right;
+    Node *r = ast_new(kind);
+    ast_set_ty(r, ty);
+    ast_set_left(r, left);
+    ast_set_right(r, right);
     return r;
 }
 
 static Node *ast_inttype(Type *ty, long val) {
-    Node *r = make_ast(AST_LITERAL);
-    r->ty = ty;
-    r->ival = val;
+    Node *r = ast_new(AST_LITERAL);
+    ast_set_ty(r, ty);
+    ast_set_ival(r, val);
     return r;
 }
 
 static Node *ast_floattype(Type *ty, double val) {
-    Node *r = make_ast(AST_LITERAL);
-    r->ty = ty;
-    r->fval = val;
+    Node *r = ast_new(AST_LITERAL);
+    ast_set_ty(r, ty);
+    ast_set_fval(r, val);
     return r;
 }
 
 static Node *ast_lvar(Type *ty, char *name) {
-    Node *r = make_ast(AST_LVAR);
-    r->ty = ty;
-    r->varname = name;
+    Node *r = ast_new(AST_LVAR);
+    ast_set_ty(r, ty);
+    ast_set_varname(r, name);
 
     if (localenv)
         map_put(localenv, name, r);
@@ -206,20 +199,20 @@ static Node *ast_lvar(Type *ty, char *name) {
 }
 
 static Node *ast_gvar(Type *ty, char *name) {
-    Node *r = make_ast(AST_GVAR);
-    r->ty = ty;
-    r->varname = name;
-    r->glabel = name;
+    Node *r = ast_new(AST_GVAR);
+    ast_set_ty(r, ty);
+    ast_set_varname(r, name);
+    ast_set_glabel(r, name);
 
     map_put(globalenv, name, r);
     return r;
 }
 
 static Node *ast_static_lvar(Type *ty, char *name) {
-    Node *r = make_ast(AST_GVAR);
-    r->ty = ty;
-    r->varname = name;
-    r->glabel = make_static_label(name);
+    Node *r = ast_new(AST_GVAR);
+    ast_set_ty(r, ty);
+    ast_set_varname(r, name);
+    ast_set_glabel(r, make_static_label(name));
 
     assert(localenv);
     map_put(localenv, name, r);
@@ -227,8 +220,8 @@ static Node *ast_static_lvar(Type *ty, char *name) {
 }
 
 static Node *ast_typedef(Type *ty, char *name) {
-    Node *r = make_ast(AST_TYPEDEF);
-    r->ty = ty;
+    Node *r = ast_new(AST_TYPEDEF);
+    ast_set_ty(r, ty);
 
     map_put(env(), name, r);
     return r;
@@ -259,14 +252,14 @@ static Node *ast_string(int enc, char *str, int len) {
     }
     }
 
-    Node *r = make_ast(AST_LITERAL);
-    r->ty = ty;
+    Node *r = ast_new(AST_LITERAL);
+    ast_set_ty(r, ty);
     r->sval = body;
     return r;
 }
 
 static Node *ast_funcall(Type *ftype, char *fname, Vector *args) {
-    Node *r = make_ast(AST_FUNCALL);
+    Node *r = ast_new(AST_FUNCALL);
     r->ty = ftype->rettype;
     r->fname = fname;
     r->args = args;
@@ -275,8 +268,8 @@ static Node *ast_funcall(Type *ftype, char *fname, Vector *args) {
 }
 
 static Node *ast_funcdesg(Type *ty, char *fname) {
-    Node *r = make_ast(AST_FUNCDESG);
-    r->ty = ty;
+    Node *r = ast_new(AST_FUNCDESG);
+    ast_set_ty(r, ty);
     r->fname = fname;
     return r;
 }
@@ -285,7 +278,7 @@ static Node *ast_funcptr_call(Node *fptr, Vector *args) {
     assert(fptr->ty->kind == KIND_PTR);
     assert(fptr->ty->ptr->kind == KIND_FUNC);
 
-    Node *r = make_ast(AST_FUNCPTR_CALL);
+    Node *r = ast_new(AST_FUNCPTR_CALL);
     r->ty = fptr->ty->ptr->rettype;
     r->fptr = fptr;
     r->args = args;
@@ -293,8 +286,8 @@ static Node *ast_funcptr_call(Node *fptr, Vector *args) {
 }
 
 static Node *ast_func(Type *ty, char *fname, Vector *params, Node *body, Vector *localvars) {
-    Node *r = make_ast(AST_FUNC);
-    r->ty = ty;
+    Node *r = ast_new(AST_FUNC);
+    ast_set_ty(r, ty);
     r->fname = fname;
     r->params = params;
     r->localvars = localvars;
@@ -303,14 +296,14 @@ static Node *ast_func(Type *ty, char *fname, Vector *params, Node *body, Vector 
 }
 
 static Node *ast_decl(Node *var, Vector *init) {
-    Node *r = make_ast(AST_DECL);
+    Node *r = ast_new(AST_DECL);
     r->declvar = var;
     r->declinit = init;
     return r;
 }
 
 static Node *ast_init(Node *val, Type *totype, int off) {
-    Node *r = make_ast(AST_INIT);
+    Node *r = ast_new(AST_INIT);
     r->initval = val;
     r->initoff = off;
     r->totype = totype;
@@ -318,14 +311,14 @@ static Node *ast_init(Node *val, Type *totype, int off) {
 }
 
 static Node *ast_conv(Type *totype, Node *val) {
-    Node *r = make_ast(AST_CONV);
+    Node *r = ast_new(AST_CONV);
     r->ty = totype;
     r->operand = val;
     return r;
 }
 
 static Node *ast_if(Node *cond, Node *then, Node *els) {
-    Node *r = make_ast(AST_IF);
+    Node *r = ast_new(AST_IF);
     r->cond = cond;
     r->then = then;
     r->els = els;
@@ -333,8 +326,8 @@ static Node *ast_if(Node *cond, Node *then, Node *els) {
 }
 
 static Node *ast_ternary(Type *ty, Node *cond, Node *then, Node *els) {
-    Node *r = make_ast(AST_TERNARY);
-    r->ty = ty;
+    Node *r = ast_new(AST_TERNARY);
+    ast_set_ty(r, ty);
     r->cond = cond;
     r->then = then;
     r->els = els;
@@ -342,63 +335,64 @@ static Node *ast_ternary(Type *ty, Node *cond, Node *then, Node *els) {
 }
 
 static Node *ast_return(Node *retval) {
-    Node *r = make_ast(AST_RETURN);
+    Node *r = ast_new(AST_RETURN);
     r->retval = retval;
     return r;
 }
 
 static Node *ast_compound_stmt(Vector *stmts) {
-    Node *r = make_ast(AST_COMPOUND_STMT);
+    Node *r = ast_new(AST_COMPOUND_STMT);
     r->stmts = stmts;
     return r;
 }
 
 static Node *ast_struct_ref(Type *ty, Node *struc, char *field) {
-    Node *r = make_ast(AST_STRUCT_REF);
-    r->ty = ty;
+    Node *r = ast_new(AST_STRUCT_REF);
+    ast_set_ty(r, ty);
     r->struc = struc;
     r->field = field;
     return r;
 }
 
 static Node *ast_goto(char *label) {
-    Node *r = make_ast(AST_GOTO);
+    Node *r = ast_new(AST_GOTO);
     r->label = label;
     return r;
 }
 
 static Node *ast_jump(char *label) {
-    Node *r = make_ast(AST_GOTO);
+    Node *r = ast_new(AST_GOTO);
     r->label = label;
     r->newlabel = label;
     return r;
 }
 
 static Node *ast_computed_goto(Node *expr) {
-    Node *r = make_ast(AST_COMPUTED_GOTO);
+    Node *r = ast_new(AST_COMPUTED_GOTO);
     r->operand = expr;
     return r;
 }
 
 static Node *ast_label(char *label) {
-    Node *r = make_ast(AST_LABEL);
+    Node *r = ast_new(AST_LABEL);
     r->label = label;
     return r;
 }
 
 static Node *ast_dest(char *label) {
-    Node *r = make_ast(AST_LABEL);
+    Node *r = ast_new(AST_LABEL);
     r->label = label;
     r->newlabel = label;
     return r;
 }
 
 static Node *ast_label_addr(char *label) {
-    Node *r = make_ast(OP_LABEL_ADDR);
+    Node *r = ast_new(OP_LABEL_ADDR);
     r->ty = make_ptr_type(type_void);
     r->label = label;
     return r;
 }
+
 
 static Type *make_type(Type *tmpl) {
     Type *r = malloc(sizeof(Type));

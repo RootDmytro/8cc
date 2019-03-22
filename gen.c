@@ -1,14 +1,16 @@
+// gen.c
 // Copyright 2012 Rui Ueyama. Released under the MIT license.
 
+#include "gen.h"
+#include "error.h"
+#include "srcloc.h"
+#include "8cc.h"
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "error.h"
-#include "srcloc.h"
-#include "8cc.h"
 
 bool dumpstack = false;
 bool dumpsource = true;

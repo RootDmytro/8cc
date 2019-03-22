@@ -6,11 +6,6 @@
 #include <stdbool.h>
 #include "pos.h"
 
-#include "props.h"
-
-#define TOK_RW(type, name) PROP_RW(Token, tok, type, name)
-#define TOK_RO(type, name) PROP_RO(Token, tok, type, name)
-
 
 enum {
     TIDENT,
@@ -55,6 +50,11 @@ Token *tok_new_number(char *sval);
 Token *tok_new_invalid(char c);
 
 Token *tok_new_char(int c, int enc);
+
+#include "props.h"
+
+#define TOK_RW(type, name) PROP_RW(Token, tok, type, name)
+#define TOK_RO(type, name) PROP_RO(Token, tok, type, name)
 
 TOK_RO(int, kind)
 TOK_RW(File *, file)

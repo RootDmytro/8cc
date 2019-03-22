@@ -1,11 +1,11 @@
 // token.c
 
-#include <stdlib.h>
-#include <string.h>
 #include "token.h"
 #include "srcstream.h"
 #include "lex.h"
 #include "file.h"
+#include <stdlib.h>
+#include <string.h>
 
 #define TOK_DEF_RO(type, name) PROP_DEF_RO(Token, tok, type, name)
 #define TOK_DEF_RW(type, name) PROP_DEF_RW(Token, tok, type, name)
